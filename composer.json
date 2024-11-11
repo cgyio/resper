@@ -1,0 +1,53 @@
+{
+	"name": "cgyio/resper",
+	"type": "framework",
+	"description": "Simple PHP framework for developing usage. Provide http request & response processing.",
+	"keywords": ["PHP framework", "cgyio", "resper", "developing usage"],
+	"homepage": "https://io.cgy.design",
+	"license": "MIT",
+	"support": {
+		"issues": "https://github.com/cgyio/resper/issues",
+		"source": "https://github.com/cgyio/resper"
+	},
+	"authors": [
+		{"name": "cgy", "email": "dommy_cgy@qq.com"}
+	],
+	"require": {
+		"php": ">=7",
+		"catfan/medoo": "^2.0",
+        "monolog/monolog": "*",
+        "guzzlehttp/guzzle": "*",
+        "matthiasmullie/minify": "^1.3"
+	},
+	"require-dev": {
+        
+    },
+	"suggest": {
+		
+	},
+	"autoload": {
+		"psr-4": {
+			"Cgy\\": [
+                "src/", 
+                "src/modules/", 
+                "../../../", 
+                "../../../library/",
+                "../../../modules/"
+            ],
+            "Cgy\\App\\": [
+                "../../../app/"
+            ]
+		},
+        "files": [
+            "src/autoload/autoload.php"
+        ]
+	},
+	"autoload-dev": {
+        "psr-4": {
+            
+        }
+	},
+	"scripts": {
+		
+	}
+}
