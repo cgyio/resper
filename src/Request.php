@@ -9,6 +9,8 @@ namespace Cgy;
 use Cgy\request\Url;
 use Cgy\request\Header;
 use Cgy\request\Ajax;
+use Cgy\request\Gets;
+use Cgy\request\Input;
 use Cgy\util\Server;
 use Cgy\util\Session;
 use Cgy\util\Is;
@@ -35,8 +37,8 @@ class Request
     //Ajax 和 跨域请求处理 对象
     public $ajax = null;
 
-    //uac
-    public $uac = null;
+    //请求用户
+    public $usr = null;
 
     //app
     public $app = null;
@@ -89,6 +91,9 @@ class Request
             $this->responseHeaders = array_merge($this->responseHeaders, $this->ajax->responseHeaders);
         }
 
+        //检查请求用户信息
+        
+
         //web 参数
         //lang
         $this->lang = self::get("lang", EXPORT_LANG);
@@ -98,7 +103,9 @@ class Request
         $this->debug = WEB_DEBUG;
 
         //处理传入数据
-        $this->gets = new 
+        $this->gets = new Gets($_GET);
+        $this->posts = new Gets($_POST);
+        $this->inputs = new Input();
     }
 
     

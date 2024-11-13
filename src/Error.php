@@ -89,6 +89,7 @@ class Error
      */
     protected function setFile($file, $line = 0)
 	{
+		//var_dump($file);
 		$rf = Path::relative($file);
 		$this->file = is_null($rf) ? $file : $rf;
 		$this->line = $line;

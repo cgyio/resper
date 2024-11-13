@@ -87,7 +87,7 @@ class Resper
         //创建 Request 请求实例
         self::$request = Request::current();
 
-        var_export(self::$request);
+        var_export(self::$request->inputs->json);
         exit;
     }
 

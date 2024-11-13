@@ -14,7 +14,17 @@ class Secure extends Util
     protected $origin = null;
 
     //处理后数据
-    protected $context = null;
+    public $context = null;
+
+    /**
+     * 构造
+     * @param Mixed $data 输入的数据
+     * @return void
+     */
+    public function __construct($data)
+    {
+        $this->origin = $data;
+    }
 
     /**
      * 外部使用
@@ -25,8 +35,7 @@ class Secure extends Util
      */
     public static function fix($data, ...$fs)
     {
-        $sec = new Secure();
-        $sec->origin = $data;
+        $sec = new Secure($data);
         //按顺序执行 过滤方法
         for ($i=0;$i<count($fs);$i++) {
             $fi = $fs[$i];
@@ -52,6 +61,11 @@ class Secure extends Util
      */
     public static function str($str, ...$fs)
     {
+        if (!is_string($str)) {
+            $sec = new Secure($str);
+            $sec->context = $str;
+            return $sec;
+        }
         //针对 String 预定义的 Secure 过滤方法
         $fs = array_merge([
             "IllegalChars",     //去除非法字符

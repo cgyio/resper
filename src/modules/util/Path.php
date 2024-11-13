@@ -24,8 +24,8 @@ class Path extends Util
      */
     public static function root()
     {
-        if (defined(ROOT_PATH)) return ROOT_PATH;
-        if (defined(PRE_PATH)) return PRE_PATH;
+        if (defined("ROOT_PATH")) return ROOT_PATH;
+        if (defined("PRE_PATH")) return PRE_PATH;
         return "";
     }
 
@@ -92,8 +92,12 @@ class Path extends Util
     {
         if (!Is::nemstr($path)) return null;
         if (empty($root)) $root = self::root();
+        //var_dump("path 1 = ".$path);
+        //var_dump("root 1 = ".$root);
         $path = self::fix($path);
         $root = self::fix($root);
+        //var_dump("path 2 = ".$path);
+        //var_dump("root 2 = ".$root);
         if (false !== strpos($path, $root)) {
             return str_replace($root.DS, "", $path);
         }
