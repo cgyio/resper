@@ -4,14 +4,43 @@
  * Str 字符串处理
  */
 
-namespace Cgy\Util;
+namespace Cgy\util;
 
 use Cgy\Util;
 use Cgy\util\Is;
 use Cgy\util\Arr;
+use Cgy\util\Conv;
 
 class Str extends Util 
 {
+
+    /**
+     * conv 方法
+     * 任意类型 转为 string
+     * @param Mixed $var
+     * @return String
+     */
+    public static function mk($var = null)
+    {
+        if (empty($var)) {
+            if (is_null($var)) return "null";
+            if (is_bool($var)) return $var ? "true" : "false";
+            return (string)$var;
+        } else if (is_bool($var)) {
+            return $var ? "true" : "false";
+        } else if (is_array($var)) {
+            return Conv::a2j($var);
+        } else if (is_string($var)) {
+            if (substr(strtolower($var), 0, 5) == "nonce") {    //生成8位随机字符串
+                return self::nonce(8);
+            }
+            return $var;
+        } else if (is_object($var)) {
+            return Conv::a2j(Arr::mk($var));
+        } else {
+            return (string)$var;
+        }
+    }
     
     /**
      * each，正则匹配，并循环
@@ -90,7 +119,7 @@ class Str extends Util
      * @param String $str 要操作的字符串
      * @return String
      */
-    public static function replaceAll($kv = [], $str)
+    public static function replaceAll($kv, $str)
     {
         for ($i=0;$i<count($kv);$i++) {
             $ki = $kv[$i];

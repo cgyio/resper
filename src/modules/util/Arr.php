@@ -8,9 +8,53 @@ namespace Cgy\util;
 
 use Cgy\Util;
 use Cgy\util\Is;
+use Cgy\util\Conv;
 
 class Arr extends Util 
 {
+
+    /**
+     * conv 方法
+     * 任意类型 转为 array
+     * @param Mixed $var 
+     * @return Array
+     */
+    public static function mk($var = null)
+    {
+        if (empty($var)) {
+            return [];
+        } else if (is_array($var)) {
+            return $var;
+        } else if (is_string($var)) {
+            if (Is::json($var)) {
+                return Conv::j2a($var);
+            } elseif (Is::query($var)) {
+                return Conv::u2a($var);
+            } elseif (Is::xml($var)){
+                return Conv::x2a($var);
+            } elseif (false !== Is::explodable($var)) {
+                $split = Is::explodable($var);
+                return explode($split, $var);
+            //} elseif (is_numeric($var)) {
+            //    return self::mk("[\"".$var."\"]");
+            } else {
+                return [ $var ];
+            }
+        } elseif (is_int($var) || is_float($var)) {
+            //return self::mk("[\"".$var."\"]");
+            return [ $var ];
+        } elseif (is_object($var)) {
+            $rst = [];
+            foreach ($var as $k => $v) {
+                if (property_exists($var, $k)) {
+                    $rst[$k] = $v;
+                }
+            }
+            return $rst;
+        } else {
+            return [ $var ];
+        }
+    }
 
     /**
      * 复制一个array
