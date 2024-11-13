@@ -20,6 +20,7 @@ class Resper extends Configer
     /**
      * 预设的设置参数
      * !! 子类自定义
+     * !! Resper::start([ ... ]) 参数格式应与此处一致
      */
     protected $init = [
 
