@@ -6,16 +6,22 @@
 
 namespace Cgy;
 
+use Cgy\Resper;
+use Cgy\App;
 use Cgy\request\Url;
 use Cgy\request\Header;
 use Cgy\request\Ajax;
 use Cgy\request\Gets;
+use Cgy\request\Posts;
 use Cgy\request\Input;
+use Cgy\request\Files;
+use Cgy\request\Seeker;
 use Cgy\util\Server;
 use Cgy\util\Session;
 use Cgy\util\Is;
 use Cgy\util\Arr;
 use Cgy\util\Conv;
+
 use Cgy\traits\staticCurrent;
 
 class Request
@@ -37,11 +43,14 @@ class Request
     //Ajax 和 跨域请求处理 对象
     public $ajax = null;
 
+    //解析 响应者 (相当于 路由实例)
+    //public $seeker = null;
+
     //请求用户
-    public $usr = null;
+    //public $usr = null;
 
     //app
-    public $app = null;
+    //public $app = null;
 
     //request参数
     //public $headers = [];
@@ -91,9 +100,6 @@ class Request
             $this->responseHeaders = array_merge($this->responseHeaders, $this->ajax->responseHeaders);
         }
 
-        //检查请求用户信息
-        
-
         //web 参数
         //lang
         $this->lang = self::get("lang", EXPORT_LANG);
@@ -104,9 +110,13 @@ class Request
 
         //处理传入数据
         $this->gets = new Gets($_GET);
-        $this->posts = new Gets($_POST);
+        $this->posts = new Posts($_POST);
         $this->inputs = new Input();
+        $this->files = new Files();
+
     }
+
+    
 
     
 
@@ -239,27 +249,5 @@ class Request
     /**
      * static tools
      */
-    
-    /**
-     * 获取 $_SERVER["FOO_****"] 内容
-     * @param String $pre 前缀名 foo  -->  $_SERVER["FOO_***"]
-     * @return Array
-     */
-    public static function getServPre($pre = "")
-    {
-        if (!Is::nemstr($pre)) return [];
-        $pre = strtoupper($pre);
-        if ("_" !== substr($pre, -1)) $pre .= "_";
-        $serv = $_SERVER;
-        $arr = [];
-        foreach ($serv as $k => $v) {
-            if ($pre !== substr($k, 0, strlen($pre))) continue;
-            $kk = strtolower(substr($k, strlen($pre)));
-            $kk = ucwords(str_replace("_", " ", $kk));
-            $kk = str_replace(" ", "-", $kk);
-            $arr[$kk] = $v;
-        }
-        return $arr;
-    }
 
 }

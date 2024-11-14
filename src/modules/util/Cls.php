@@ -102,11 +102,12 @@ class Cls extends Util
      * @param String $cls 类全称
      * @param String $method 要检查的方法名
      * @param String $filter 过滤方法，默认 null
+     * @param Closure $condition 条件判断函数，参数为 ReflectionMethod 实例，返回 Bool
      * @return Bool
      */
-    public static function hasMethod($cls, $method, $filter=null)
+    public static function hasMethod($cls, $method, $filter=null, $condition=null)
     {
-        $ms = self::methodNames($cls, $filter);
+        $ms = self::methodNames($cls, $filter, $condition);
         return in_array($method, $ms);
     }
     
@@ -156,11 +157,12 @@ class Cls extends Util
      * @param String $cls 类全称
      * @param String $property 要检查的属性名
      * @param String $filter 过滤方法，默认 null
+     * @param Closure $condition 条件判断函数，参数为 ReflectionMethod 实例，返回 Bool
      * @return Bool
      */
-    public static function hasProperty($cls, $property, $filter=null)
+    public static function hasProperty($cls, $property, $filter=null, $condition=null)
     {
-        $ps = self::propertyNames($cls, $filter);
+        $ps = self::propertyNames($cls, $filter, $condition);
         return in_array($property, $ps);
     }
     

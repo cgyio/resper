@@ -59,8 +59,10 @@ class Input
             case "url" :
                 $output = Conv::u2a($input);
                 break;
-            default :
+            case "arr" : 
                 $output = Arr::mk($input);
+            default :
+                $output = $input;
                 break;
         }
         return $output;
@@ -77,6 +79,7 @@ class Input
      */
     public function __get($key)
     {
+        //if ($key=="raw") $key = "";
         $out = $this->export($key);
         return $out;
     }

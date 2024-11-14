@@ -11,10 +11,14 @@ require_once(__DIR__."/../../../autoload.php");
 
 use Cgy\util\Path;
 use Cgy\util\Arr;
+use Cgy\util\Str;
 use Cgy\util\Is;
 use Cgy\config\Resper as ResperConfiger;
 use Cgy\Error;
 use Cgy\Request;
+use Cgy\request\Seeker;
+use Cgy\Response;
+use Cgy\response\Respond;
 
 class Resper 
 {
@@ -39,8 +43,12 @@ class Resper
     /**
      * 核心类实例缓存
      */
-    protected static $request = null;
-    protected static $response = null;
+    public static $request = null;
+    public static $response = null;
+    //解析得到的 respond 响应类
+    public static $respond = null;
+    //如果响应类是 app 则缓存 app 实例
+    public static $app = null;
 
     
 
@@ -86,8 +94,10 @@ class Resper
         //请求/响应 流程开始
         //创建 Request 请求实例
         self::$request = Request::current();
+        //解析响应类
+        self::$respond = new Seeker();
 
-        var_export(self::$request->inputs->json);
+        var_export(self::$respond);
         exit;
     }
 
@@ -300,7 +310,7 @@ class Resper
 
     /**
      * 获取 类全称
-     * foo/bar  -->  NS\foo\bar
+     * foo/bar  -->  NS\foo\Bar
      * @param String $path      full class name
      * @param String $pathes...
      * @return Class            not found return null
@@ -311,7 +321,14 @@ class Resper
         if (empty($ps)) return null;
         $cl = null;
         for ($i=0; $i<count($ps); $i++) {
-            $cls = NS . str_replace("/","\\", $ps[$i]);
+            $pi = trim($ps[$i], "/");
+            $pia = explode("/", $pi);
+            $pin = $pia[count($pia)-1];
+            if (!Str::beginUp($pin)) {
+                $pia[count($pia)-1] = ucfirst($pin);
+            }
+            $cls = NS . implode("\\", $pia);
+            //$cls = NS . str_replace("/","\\", trim($ps[$i], "/"));
             //var_dump($cls);
             if (class_exists($cls)) {
                 $cl = $cls;

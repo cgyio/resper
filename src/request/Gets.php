@@ -1,6 +1,6 @@
 <?php
 /**
- * cgyio/resper $_GET/$_POST 处理类
+ * cgyio/resper $_GET 处理类
  */
 
 namespace Cgy\request;
