@@ -11,6 +11,7 @@ namespace Cgy\config;
 
 use Cgy\Resper as Rp;
 use Cgy\Configer;
+use Cgy\Event;
 use Cgy\util\Is;
 use Cgy\util\Arr;
 use Cgy\util\Path;
@@ -282,10 +283,20 @@ class Resper extends Configer
             $mco[$mdn] = $cfg;
         }
         @closedir($mdh);
-        //定义常量 无前缀
-        Rp::def($this->ctx("module"), "");
         //各 module configer 实例缓存到 $this
         $this->module = (object)$mco;
+
+        /**
+         * 等待 Resper::$resper 响应类确定后，再定义 MODULE_*** 常量
+         */
+        //定义常量 无前缀
+        //Rp::def($this->ctx("module"), "");
+        //订阅一次性事件
+        Event::addHandlerOnce("resper-found", $this, function($trby) {
+            var_dump($this);
+            var_dump(Rp::$resper);
+        });
+        
         return $this;
     }
     // initAppConf 初始化 各 app config
