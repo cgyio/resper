@@ -24,6 +24,9 @@ class Configer
     //经过处理后的 运行时参数
     protected $context = [];
 
+    //已定义的常量
+    public static $cnsts = [];
+
     /**
      * 构造
      * @param Array $opt 输入的设置参数
@@ -82,7 +85,7 @@ class Configer
          * $this->field  -->  $this->context[field]
          */
         if (isset($this->context[$key])) {
-            //$ctx = $this->context[$key];
+            $ctx = $this->context[$key];
             //if (Is::associate($ctx)) return (object)$ctx;
             return $ctx;
         }
@@ -150,6 +153,36 @@ class Configer
         }
 
         return $val;
+    }
+
+
+
+    /**
+     * static tools
+     */
+
+    /**
+     * 定义常量
+     * @param Array $defs
+     * @param String $pre 常量前缀
+     * @return Array
+     */
+    public static function def($defs = [], $pre="")
+    {
+        $pre = ($pre=="" || !Is::nemstr($pre)) ? "" : strtoupper($pre)."_";
+        foreach ($defs as $k => $v) {
+            $k = $pre.strtoupper($k);
+            $ln = count(explode("_",$k));
+            if (Is::associate($v) && !empty($v)) {
+                self::def($v, $k);
+            } else {
+                if (!defined($k)) {
+                    self::$cnsts[] = $k;
+                    define($k, $v);
+                }
+            }
+        }
+        return $defs;
     }
     
 }

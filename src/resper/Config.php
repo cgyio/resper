@@ -7,16 +7,16 @@
  * 
  */
 
-namespace Cgy\config;
+namespace Cgy\resper;
 
-use Cgy\Resper as Rp;
+use Cgy\Resper;
 use Cgy\Configer;
 use Cgy\Event;
 use Cgy\util\Is;
 use Cgy\util\Arr;
 use Cgy\util\Path;
 
-class Resper extends Configer 
+class Config extends Configer 
 {
     /**
      * 预设的设置参数
@@ -95,7 +95,7 @@ class Resper extends Configer
          * !! 尽量使用默认设置
          */
         "export" => [
-            "formats"   => ",html,page,json,xml,str,dump",
+            "formats"   => "pause,html,page,json,xml,str,dump",
             "format"    => "html",
             "lang"      => "zh-CN",     //输出语言
             "psr7"      => false,		//是否以Psr-7标准返回响应
@@ -141,6 +141,16 @@ class Resper extends Configer
         ],
     ];
 
+    /**
+     * 固定的 常量
+     */
+    protected $defines = [
+        "version" => "0.0.1",       //版本升级时修改
+        "ds" => DIRECTORY_SEPARATOR,
+        "ns" => "\\Cgy\\",
+        "ext" => ".php",
+    ];
+
     //各 module 的 configer 实例
     public $module = null;
 
@@ -156,6 +166,8 @@ class Resper extends Configer
     {
         //用户设置应用完成后，执行 config 初始化动作
 
+        //定义 固定常量 / 系统路径
+        $this->initStatic();
         //初始化 web 路径
         $this->initWebPath();
         //初始化 各设置项
@@ -163,14 +175,40 @@ class Resper extends Configer
 
         return $this;
     }
-
+    
+    /**
+     * 定义固定常量 / 系统路径
+     * @return $this
+     */
+    protected function initStatic()
+    {
+        //定义 固定常量
+        self::def($this->defines);
+        //定义 系统路径常量
+        $pre = Path::fix(__DIR__.DS."..".DS."..".DS."..".DS."..".DS."..");
+        $vdp = $pre.DS."vendor";
+        $cgp = $vdp.DS."cgyio";
+        $rep = $cgp.DS."resper".DS."src";
+        $mdp = $rep.DS."modules";
+        $path = [
+            "pre_path" => $pre,
+            "vendor_path" => $vdp,
+            "cgy_path" => $cgp,
+            "resper_path" => $rep,
+            "module_path" => $mdp
+        ];
+        self::def($path);
+        //路径常量合并到 $defines
+        $this->defines = Arr::extend($this->defines, $path);
+        return $this;
+    }
 
     /**
      * 初始化
      * 初始化 web 路径  并定义为常量
      * @return $this
      */
-    public function initWebPath()
+    protected function initWebPath()
     {
         $root = $this->ctx("web/root");
         $root = $root=="" ? PRE_PATH : PRE_PATH.DS.str_replace("/",DS,trim($root,"/"));
@@ -190,7 +228,7 @@ class Resper extends Configer
             //"plugin_path"   => $root . DS . "plugin",
             "cache_path"    => $root . DS . "cache",
         ];
-        Rp::def($defs);
+        self::def($defs);
         return $defs;
     }
 
@@ -199,7 +237,7 @@ class Resper extends Configer
      * 处理 context 中的各项 设置内容
      * @return $this
      */
-    public function initConf()
+    protected function initConf()
     {
         $ctx = $this->context;
         foreach ($ctx as $k => $v) {
@@ -211,7 +249,7 @@ class Resper extends Configer
                 //未定义处理方法，则默认定义为 常量
                 //以 item 名称作为常量前缀
                 $k = strtolower($k);
-                Rp::def($v, $k);
+                self::def($v, $k);
             }
         }
         return $this;
@@ -248,7 +286,7 @@ class Resper extends Configer
             $conf["key"] = strtolower(array_slice(explode("/",$conf["root"]), -1)[0]);
         }
         //定义常量
-        Rp::def($conf, "web");
+        self::def($conf, "web");
         return $this;
     }
     // initModuleConf 初始化 各 module config
@@ -264,7 +302,7 @@ class Resper extends Configer
             //模块名 必须小写
             $mdn = strtolower($md);
             //获取 module/Config 设置类
-            $cls = Rp::cls($mdn."/Config");
+            $cls = Resper::cls($mdn."/Config");
             if (empty($cls)) continue;
             //读取用户设置项
             $opt = $this->ctx("module/".$mdn);
@@ -290,12 +328,14 @@ class Resper extends Configer
          * 等待 Resper::$resper 响应类确定后，再定义 MODULE_*** 常量
          */
         //定义常量 无前缀
-        //Rp::def($this->ctx("module"), "");
+        //self::def($this->ctx("module"), "");
         //订阅一次性事件
-        Event::addHandlerOnce("resper-found", $this, function($trby) {
+        /*Event::addHandlerOnce("resper-created", $this, function($resper, $rtype) {
+            var_dump("Event resper-created triggered !!");
             var_dump($this);
-            var_dump(Rp::$resper);
-        });
+            var_dump($resper);
+            var_dump($rtype);
+        });*/
         
         return $this;
     }
@@ -313,7 +353,7 @@ class Resper extends Configer
             $apn = strtolower($app);
             if (!file_exists($appd.DS.ucfirst($apn).EXT)) continue;
             //获取 App/apn/Config 设置类
-            $cls = Rp::cls("App/".$apn."/Config");
+            $cls = Resper::cls("App/".$apn."/Config");
             if (empty($cls)) continue;
             //读取用户设置项
             $opt = $this->ctx("app/".$apn);
@@ -332,10 +372,12 @@ class Resper extends Configer
             $aco[$apn] = $cfg;
         }
         @closedir($aph);
-        //定义常量 前缀：APP_
-        Rp::def($this->ctx("app"), "app");
         //各 app configer 实例缓存到 $this
         $this->app = (object)$aco;
+        
+        //定义常量 前缀：APP_
+        //self::def($this->ctx("app"), "app");
+
         return $this;
     }
 

@@ -7,7 +7,9 @@
 namespace Cgy;
 
 use Cgy\Resper;
+use Cgy\Response;
 use Cgy\App;
+use Cgy\Event;
 use Cgy\request\Url;
 use Cgy\request\Header;
 use Cgy\request\Ajax;
@@ -113,6 +115,9 @@ class Request
         $this->posts = new Posts($_POST);
         $this->inputs = new Input();
         $this->files = new Files();
+
+        //触发 request-created 事件
+        Event::trigger("request-created", $this);
 
     }
 

@@ -1,70 +1,69 @@
 <?php
 /**
- * cgyio/resper request 工具类
- * Seeker 响应查找
- * 根据 Request::$current->url->path 查询响应此 request 的 类/方法
- * 可以响应 request 的类：App类 / module类 / Response类
+ * cgyio/resper 核心类
+ * Resper 响应者类 查找
  */
 
-namespace Cgy\request;
+namespace Cgy\resper;
 
-use Cgy\Resper;
+use Cgy\Resper as Rp;
+use Cgy\request\Url;
+use Cgy\Response;
 use Cgy\App;
 use Cgy\Module;
-use Cgy\request\Url;
-use Cgy\response\Respond;
+use Cgy\Event;
 use Cgy\util\Is;
 use Cgy\util\Arr;
 use Cgy\util\Cls;
 
 class Seeker 
 {
+    //本次会话的响应者
+    public static $current = null;
 
-    //本次会话调用的 响应类/方法
-    public $context = [];
-
-    /**
-     * 构造
-     * @return void
-     */
-    public function __construct()
-    {
-        $this->context = self::seek();
-    }
-
-    /**
-     * __get
-     * @param String $key
-     */
-    public function __get($key)
-    {
-        if (isset($this->context[$key])) {
-            return $this->context[$key];
-        }
-        return null;
-    }
+    //本次会话调用的 响应者参数
+    public static $params = [
+        /*
+        "resper"    => 响应者 类全称
+        "method"    => 响应方法 实例 public 方法
+        "uri"       => 本次响应的 URI 参数数组 即 URI 路径
+        */
+    ];
 
     /**
-     * 如果找到的响应类是 app 类 则返回类全称
-     * @return Mixed 类全称 or null
+     * !! Resper 核心方法
      */
-    public function app()
-    {
-        if (empty($this->context)) return null;
-        $cls = $this->context["response"];
-        if (is_subclass_of($cls, Resper::cls("App"))) return $cls;
-        return null;
-    }
 
+    /**
+     * !! 核心方法
+     * 查找当前会话的 响应者
+     * @return Resper 实例
+     */
+    public static function current()
+    {
+        $params = self::seek();
+        self::$params = $params;
+        $resperCls = $params["resper"];
+        $resper = new $resperCls();
+        $rtype = $resper->type;
+        self::$current = $resper;
+
+        /**
+         * 触发 resper-created 事件
+         */
+        Event::trigger("resper-created", $resper, $resper->type);
+
+        return $resper;
+    }
 
     /**
      * !! 核心方法
      * 根据 Request::$current->url->path 查询响应此 request 的 类/方法
-     * 可以响应的类：App类 / module类 / Respond类(route类)
+     * 可以响应的类：App类 / module类 / Resper类(route类)
      * @param Array $uri URI 路径，不指定则使用 url->path
      * @return Array 得到的目标 类，方法，uri参数，未找到 返回 null
      * 结构：[
-     *          "response"  => 类全称 or 类实例
+     *          "resper"    => 类全称 or 类实例
      *          "method"    => 响应方法，类实例的 public 方法
      *          "uri"       => 处理后，用作方法参数的 剩余 URI 路径数组
      *      ]
@@ -85,7 +84,7 @@ class Seeker
          * 否则调用 \response\Respond::empty() 
          * 
          */
-        $response = Resper::cls("response/Respond");
+        $resper = Rp::cls("resper/Resper");
         $method = "empty";
 
         /**
@@ -94,10 +93,10 @@ class Seeker
         if (empty($uri)) {
             if (false !== ($appcls = App::has("index"))) {
                 //如果存在 app/index 则调用 \App\Index::empty()
-                $response = $appcls;
+                $resper = $appcls;
             }
             return [
-                "response"  => $response,
+                "resper"    => $resper,
                 "method"    => $method,
                 "uri"       => []
             ];
@@ -109,33 +108,33 @@ class Seeker
         $cls = App::has($uri[0]);
         $ma = [];
         if ($cls !== false) {
-            $response = $cls;
+            $resper = $cls;
             $ma = self::seekMethod($cls, array_slice($uri, 1));
         } else {
             $cls = Module::has($uri[0]);
             if ($cls !== false) {
-                $response = $cls;
+                $resper = $cls;
                 $ma = self::seekMethod($cls, array_slice($uri, 1));
             }
         }
         if (!empty($ma)) {
             return [
-                "response"  => $response,
+                "resper"    => $resper,
                 "method"    => $ma[0],
                 "uri"       => $ma[1]
             ];
         }
 
         /**
-         *  2  判断是否 response\Respond 类 (相当于 route 类)
+         *  2  判断是否 resper\Resper 类 (相当于 route 类)
          */
-        $rpd = Respond::has($uri[0]);
+        $rpd = Resper::has($uri[0]);
         if (false !== $rpd) {
-            $response = $rpd;
+            $resper = $rpd;
             $ma = self::seekMethod($rpd, array_slice($uri, 1));
             if (!empty($ma)) {
                 return [
-                    "response"  => $response,
+                    "resper"    => $resper,
                     "method"    => $ma[0],
                     "uri"       => $ma[1]
                 ];
@@ -147,11 +146,11 @@ class Seeker
          */
         $app = App::has("index");
         if (false !== $app) {
-            $response = $app;
+            $resper = $app;
             $ma = self::seekMethod($app, $uri);
             if (!empty($ma)) {
                 return [
-                    "response"  => $response,
+                    "resper"    => $resper,
                     "method"    => $ma[0],
                     "uri"       => $ma[1]
                 ];
@@ -159,23 +158,23 @@ class Seeker
         }
 
         /**
-         *  4  判断是否 response/Respond 基类中的 某个 public 方法
+         *  4  判断是否 resper/Resper 基类中的 某个 public 方法
          */
-        $rpd = Resper::cls("response/Respond");
+        $rpd = Rp::cls("resper/Resper");
         $ma = self::seekMethod($rpd, $uri);
         if (!empty($ma)) {
             return [
-                "response"  => $rpd,
+                "resper"    => $rpd,
                 "method"    => $ma[0],
                 "uri"       => $ma[1]
             ];
         }
 
         /**
-         *  5  全部失败，调用 response/Respond::error()
+         *  5  全部失败，调用 resper/Resper::error()
          */
         return [
-            "response"  => Resper::cls("response/Respond"),
+            "resper"    => Rp::cls("resper/Resper"),
             "method"    => "error",
             "uri"       => $uri
         ];
@@ -192,7 +191,7 @@ class Seeker
     public static function seekMethod($cls, $uri = [])
     {
         //如果 $cls 不是 Respond 子类，返回 null
-        if (!is_subclass_of($cls, Resper::cls("response/Respond"))) return null;
+        if (!is_subclass_of($cls, Rp::cls("resper/Resper"))) return null;
         //空 uri
         if (!Is::nemarr($uri) || !Is::indexed($uri)) {
             return ["empty", []];
@@ -208,5 +207,16 @@ class Seeker
         } else {
             return [ "default", $uri ];
         }
+    }
+
+    /**
+     * !! 核心方法
+     * 找到响应者后，由响应者创建 Response 响应实例
+     * @param Mixed $data 要输出的数据，不指定则调用 Resper::$params["method"] 指定的方法生成输出数据
+     * @return Response 实例
+     */
+    public static function response($data = null)
+    {
+        $response = Response::current();
     }
 }
