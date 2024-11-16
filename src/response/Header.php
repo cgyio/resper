@@ -10,6 +10,7 @@ use Cgy\Header as Hdr;
 use Cgy\Resper;
 use Cgy\Request;
 use Cgy\Response;
+use Cgy\util\Is;
 use Cgy\util\Arr;
 
 class Header extends Hdr 
@@ -50,6 +51,32 @@ class Header extends Hdr
             $this->context = Arr::extend($this->context, $key);
         } else if (is_string($key)/* && isset($this->context[$key])*/) {
             $this->context[$key] = $val;
+        }
+        return $this;
+    }
+
+    /**
+     * 发送 headers 开始输出
+     * @param Mixed $key 关联数组 或 键名
+     * @param Mixed $val 
+     * @return $this
+     */
+    public function sent($key = [], $val = null)
+    {
+        //如果 headers 已发送，返回
+        if (headers_sent() === true) return $this;
+        if (!empty($key)) {
+            if (Is::associate($key)) {
+                foreach ($key as $k => $v) {
+                    header("$k: $v");
+                }
+            } else if (is_string($key) && is_string($val)) {
+                header("$key: $val");
+            }
+        } else {
+            foreach ($this->context as $k => $v) {
+                header("$k: $v");
+            }
         }
         return $this;
     }

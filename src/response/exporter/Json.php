@@ -1,12 +1,14 @@
 <?php
-/*
- * Attobox Framework / Response Exporter
- * export json
+/**
+ * cgyio/resper Response 输出类
+ * Json 输出类
  */
 
-namespace Atto\Box\response\exporter;
+namespace Cgy\response\exporter;
 
-use Atto\Box\response\Exporter;
+use Cgy\response\Exporter;
+use Cgy\Response;
+use Cgy\util\Conv;
 
 class Json extends Exporter
 {
@@ -17,9 +19,9 @@ class Json extends Exporter
     public function prepare()
     {
         if ($this->response->exportOnlyData) {
-            $this->content = a2j($this->data["data"]);
+            $this->content = Conv::a2j($this->data["data"]);
         } else {
-            $this->content = a2j($this->data);
+            $this->content = Conv::a2j($this->data);
         }
     }
 

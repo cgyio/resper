@@ -1,12 +1,13 @@
 <?php
-/*
- * Attobox Framework / Response Exporter
- * export through var_dump method
+/**
+ * cgyio/resper Response 输出类
+ * Dump debug 模式下 直接输出 var_dump
  */
 
-namespace Atto\Box\response\exporter;
+namespace Cgy\response\exporter;
 
-use Atto\Box\response\Exporter;
+use Cgy\response\Exporter;
+use Cgy\Response;
 
 class Dump extends Exporter
 {

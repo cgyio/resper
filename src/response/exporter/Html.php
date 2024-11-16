@@ -1,17 +1,23 @@
 <?php
-/*
- * Attobox Framework / Response Exporter
- * export html
+/**
+ * cgyio/resper Response 输出类
+ * Html HTML 页面输出类
  */
 
-namespace Atto\Box\response\exporter;
+namespace Cgy\response\exporter;
 
-use Atto\Box\response\Exporter;
-use Atto\Box\Response;
+use Cgy\Resper;
+use Cgy\response\Exporter;
+use Cgy\Response;
+use Cgy\util\Str;
+use Cgy\util\Path;
 
 class Html extends Exporter
 {
     public $contentType = "text/html; charset=utf-8";
+
+    //错误 html
+    public $errHtml = "<html><body style=\"font-family:monospace;\"><h1>Error: %{title}%</h1><h2>%{msg}%</h2><hr style=\"height:1px;color:#000;overflow:hidden;\">file: %{file}%<br>line: %{line}%</body></html>";
 
     //准备输出的数据
     public function prepare()
@@ -20,12 +26,33 @@ class Html extends Exporter
         if (!empty($d) && isset($d["type"]) && $d["type"]=="Error") {
             //输出错误提示
             $error = $d;
-            //调用 box/page/error.php
-            require(path_find("box/page/error.php"));
-            //从 输出缓冲区 中获取内容
-            $this->content = ob_get_contents();
-            //清空缓冲区
-            ob_clean();
+            //调用 系统错误页面，在这些路径中查找 $epn.php 中查找
+            $pgps = [];
+            $epn = EXPORT_ERRPAGE.EXT;
+            $resper = Resper::current();
+            $responder = $resper->responder;
+            $rtp = $responder->type;
+            $rnm = $responder->cls;
+            if ($rtp == "App") {
+                $pgps[] = "app/".strtolower($rnm)."/".$epn;
+            } else {
+                $pgps[] = "module/".strtolower($rnm)."/".$epn;
+            }
+            $pgps[] = "root/".$epn;
+            $pgps[] = "resper/error/".$epn;
+            $errpage = Path::exists($pgps,[
+                "inDir" => "page"
+            ]);
+
+            if (empty($errpage) || !file_exists($errpage)) {
+                $this->content = Str::tpl($this->errHtml, $error);
+            } else {
+                require($errpage);
+                //从 输出缓冲区 中获取内容
+                $this->content = ob_get_contents();
+                //清空缓冲区
+                ob_clean();
+            }
         } else {
             if (empty($d)) {
                 $this->content = "";

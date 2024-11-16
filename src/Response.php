@@ -12,6 +12,7 @@ use Cgy\response\Header;
 use Cgy\response\Exporter;
 use Cgy\util\Is;
 use Cgy\util\Arr;
+use Cgy\util\Path;
 
 use Cgy\traits\staticCurrent;
 
@@ -35,22 +36,27 @@ class Response
         "errors" => []
     ];
 
+    //Resper 框架实例
+    public $resper = null;
+
     //Request 请求实例
     public $request = null;
 
     /**
-     * 响应者实例 resper\Resper
+     * 响应者实例 resper\Responder
      * !! 在创建 Response 实例之前，必须建立 响应者实例
      */
-    public $resper = null;
+    public $responder = null;
 
     //响应头实例
     public $header = null;
 
     //响应参数
+    public $paused = false;
     public $protocol = "1.1";
     public $status = 200;
-    public $format = EXPORT_FORMAT;
+    public $format = "html";
+    public $psr7 = true;
 
     //准备输出的内容
     public $data = null;
@@ -72,16 +78,36 @@ class Response
      */
     public function __construct()
     {
+        //Resper 实例
+        $this->resper = Resper::$current;
         //Request 实例
-        $this->request = Resper::$request;
+        $this->request = $this->resper->request;
         //响应者实例
-        $this->resper = Resper::$resper;
+        $this->responder = $this->resper->responder;
         //创建响应头
         $this->header = new Header();
+        //是否暂停响应
+        $this->paused = $this->request->pause && !$this->responder->unpause;
+
+        /**
+         * 暂停响应
+         */
+        if ($this->paused) {
+            $this->setFormat("pause");
+            //直接输出
+            $this->export();
+            exit;
+        }
         
+        /**
+         * 初始化 response 参数
+         */
         //从 url 中输入可能存在的 format 参数
         $this->setFormat();
+        $this->psr7 = EXPORT_PSR7;
     }
+
+
 
     /**
      * 生成 response 参数
@@ -110,14 +136,16 @@ class Response
 
     /**
      * 输出
+     * @param Bool $usePsr7 是否使用 PSR-7 标准输出
+     * @return Exit
      */
     public function export($usePsr7 = false)
     {
-        $exporter = $this->createExporter();
+        $exporter = Exporter::create($this);
         $exporter->prepare();
         //var_dump($this->info());
 
-        if (RESPONSE_PSR7 == true || $usePsr7 == true) {
+        if ($this->psr7 == true || $usePsr7 == true) {
             $status = $this->status;
             $headers = $this->headers;
             $body = $exporter->content;
@@ -127,6 +155,8 @@ class Response
         } else {
             return $exporter->export();
         }
+
+        //会话结束
         exit;
     }
 
@@ -143,8 +173,9 @@ class Response
                 $errdata["exporter"] = $this->exporter;
                 $this->setData($errdata);
                 
-                //$this->setExporter("error");
-                $exporter = $this->createExporter();
+                ////$this->setExporter("error");
+                $exporter = Exporter::create($this);
+                //$exporter = Exporter::Error($this);
                 $exporter->prepare();
                 return $exporter->export();
             }
@@ -182,19 +213,26 @@ class Response
 
     /**
      * 设定输出内容 data
-     * @param Mixed $data 当 $reset==true 时可以为 null 表示清除当前 data
-     * @param Bool $reset 是否重置
+     * @param Mixed $data
+     * @param Mixed $val 以 key=>val 形式设置输出内容
      * @return Response
      */
-    public function setData($data = null, $reset = false)
+    public function setData($data = null, $val = null)
     {
-        if (is_null($this->data) || $reset) {
+        if (Is::associate($data) && Is::associate($this->data)) {
+            $this->data = Arr::extend($data);
+            return $this;
+        }
+        if (!Is::nemstr($data)) {
             $this->data = $data;
         } else {
-            if (is_array($this->data) && is_array($data)) {
-                $this->data = Arr::extend($this->data, $data);
-            } else {
+            if (is_null($val)) {
+                //$this->data 赋值为 String
                 $this->data = $data;
+            } else {
+                //以 key=>val 形式设置输出内容
+                if (!Is::associate($this->data)) $this->data = [];
+                $this->data[$data] = $val;
             }
         }
         return $this;
@@ -254,12 +292,13 @@ class Response
     public function setExporter($format = null)
     {
         if ($this->status != 200) {
-            $exporter = Exporter::has("code");
+            $this->format = "code";
+            $exporter = Exporter::get("code");
         } else {
             if (is_null($format)) {
-                $exporter = Exporter::has($this->format);
+                $exporter = Exporter::get($this->format);
             } else {
-                $exporter = Exporter::has($format);
+                $exporter = Exporter::get($format);
             }
         }
         if (Is::nemstr($exporter) && class_exists($exporter)) {
@@ -272,16 +311,22 @@ class Response
 
     /**
      * 手动设定多个参数
+     * @param Array $params 要设置的参数
      * @return Response
      */
     public function setParams($params = [])
     {
-        //var_dump($params);
-        if (isset($params["headers"]) && is_array($params["headers"]) && !empty($params["headers"])) {
-            $this->setHeaders($params["headers"]);
+        if (isset($params["headers"])) {
+            $hds = $params["headers"];
+            if (Is::nemarr($hds) && Is::associate($hds)) {
+                $this->setHeaders($hds);
+            }
+            unset($params["headers"]);
         }
-        if (isset($params["headers"])) unset($params["headers"]);
-        foreach (["data","format","status","exportOnlyData"] as $k => $v) {
+        
+        //已定义的 response 参数
+        $ks = explode(",", "data,format,status,exportOnlyData");
+        foreach ($ks as $k => $v) {
             if (isset($params[$v])) {
                 $m = "set".ucfirst($v);
                 if (method_exists($this, $m)) {
@@ -292,50 +337,30 @@ class Response
                 unset($params[$v]);
             }
         }
+
+        //其他参数
         foreach ($params as $k => $v) {
-            //if (property_exists($this, $k)) $this->$k = $v;
             if (!property_exists($this, $k)) $this->$k = $v;
-            //$this->$k = $v;
         }
+
+        //var_dump($this->info());
         
         return $this;
     }
 
 
-    /**
-     * 创建 exporter 对象
-     * @return Exporter
-     */
-    public function createExporter()
-    {
-        if (empty($this->exporter)) $this->setStatus(500);
-        $exporterClass = $this->exporter;
-        return new $exporterClass($this);
-    }
 
     /**
-     * sent headers
+     * 发送响应头
+     * @param Mixed $key 关联数组 或 键名
+     * @param Mixed $val 
      * @return Response
      */
     public function sentHeaders($key = [], $val = null)
     {
-        if (headers_sent() === true) return $this;
-        if (!empty($key)) {
-            if (is_associate($key)) {
-                foreach ($key as $k => $v) {
-                    header("$k: $v");
-                }
-            } else if (is_string($key) && is_string($val)) {
-                header("$key: $val");
-            }
-        } else {
-            foreach ($this->headers as $k => $v) {
-                header("$k: $v");
-            }
-        }
+        $this->header->sent($key, $val);
         return $this;
     }
-
 
     /**
      * response info
@@ -344,12 +369,14 @@ class Response
     public function info()
     {
         $rtn = [];
-        $keys = array_keys(self::$defaultParams);
+        //$keys = array_keys(self::$defaultParams);
+        $keys = explode(",", "format,status,protocol,paused,psr7,data,errors,exporter,exportOnlyData");
         for ($i=0;$i<count($keys);$i++) {
             $ki = $keys[$i];
             $rtn[$ki] = $this->$ki;
         }
-        $rtn["route"] = $this->rou->info();
+        //$rtn["route"] = $this->rou->info();
+        $rtn["headers"] = $this->header->context;
         return $rtn;
     }
 
@@ -357,6 +384,9 @@ class Response
     /**
      * 静态调用，按 format 输出
      * 输出后退出
+     * @param String $format
+     * @param Mixed $data 要输出的内容
+     * @param Array $params 额外的 response 参数
      * @return void
      */
     private static function _export($format = "html", $data = null, $params = [])
@@ -369,7 +399,61 @@ class Response
         exit;
     }
 
-    public static function json($data =  [], $params = [])
+    /**
+     * __callStatic
+     * 静态调用，按 format 输出
+     * 输出后退出
+     * @param String $format 输出的 format  or  _export
+     * @param Array $args 输出参数
+     * @return Exit;
+     */
+    public static function __callStatic($format, $args)
+    {
+        $response = self::$current;
+
+        /**
+         * Response::code()
+         */
+        if ($format == "code") return $response->setStatus(...$args)->export();
+
+        /**
+         * Response::error() == trigger_error("custom::....")
+         */
+        if ($format == "error") {
+            $errtit = "custom::".implode(",",$args);
+            trigger_error($errtit, E_USER_ERROR);
+            exit;
+        }
+
+        /**
+         * Response::page()
+         */
+        if ($format == "page") {
+            $page = $args[0] ?? null;
+            if (Is::nemstr($page)) $page = Path::find($page, ["inDir"=>"page"]);
+            if (!Is::nemstr($page) || !file_exists($page)) return self::code(404);
+            array_shift($args); //page
+            return self::_export("page", $page, ...$args);
+        }
+
+
+        /**
+         * Response::format() == call Response::_export()
+         */
+        if ($format == "format") return self::_export(...$args);
+
+        /**
+         * 输出已定义的 format
+         */
+        $fs = EXPORT_FORMATS;
+        if (in_array($format, $fs)) {
+            return self::_export($format, ...$args);
+        }
+
+        return null;
+    }
+
+    /*public static function json($data =  [], $params = [])
     {
         return self::_export("json", $data, $params);
     }
@@ -407,7 +491,7 @@ class Response
         $errtit = $errtype."::".implode(",",$errmsg);
         trigger_error($errtit, E_USER_ERROR);
         exit;
-    }
+    }*/
 
     public static function errpage($params = [])
     {
@@ -474,25 +558,6 @@ class Response
     {
         $args = func_get_args();
         return self::$current->sentHeaders(...$args);
-    }
-
-    /**
-     * 获取要输出的 format 类型
-     * format 类型在 EXPORT_FORMATS 中定义
-     * @return String
-     */
-    public static function getExportFormat($format = null)
-    {
-        if (Request::$current->debug) return "dump";
-        $fs = arr(strtolower(EXPORT_FORMATS));
-        $format = empty($format) ? Request::get("format", EXPORT_FORMAT) : $format;
-        $format = strtolower($format);
-        if (is_notempty_str($format)) {
-            if (in_array($format, $fs) && !is_null(Exporter::has($format))) {
-                return $format;
-            }
-        }
-        return strtolower(EXPORT_FORMAT);
     }
 
     /**

@@ -1,13 +1,13 @@
 <?php
-/*
- * Attobox Framework / Response Exporter
- * export response code
+/**
+ * cgyio/resper Response 输出类
+ * Code 直接输出 http_response_code 
  */
 
-namespace Atto\Box\response\exporter;
+namespace Cgy\response\exporter;
 
-use Atto\Box\response\Exporter;
-use Atto\Box\Response;
+use Cgy\response\Exporter;
+use Cgy\Response;
 
 class Code extends Exporter
 {

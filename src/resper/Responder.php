@@ -4,21 +4,17 @@
  * 
  * Resper == Responder 响应者
  * Resper 框架实质上是一个 路由器，根据输入的 URI 查找对应的响应 类/方法
- * 由 Resper 类派生的子类 都可以作为 会话的响应者
+ * 由 Responder 类派生的子类 都可以作为 会话的响应者
  * 这些子类包括：App 类 / Module 类 
  */
 
 namespace Cgy\resper;
 
-use Cgy\Resper as Rp;
+use Cgy\Resper;
 use Cgy\resper\Seeker;
-//use Cgy\Module;
-//use Cgy\Event;
-//use Cgy\util\Is;
-//use Cgy\util\Arr;
-//use Cgy\util\Cls;
+use Cgy\Response;
 
-class Resper extends Seeker
+class Responder extends Seeker
 {
     /**
      * 响应者实例参数
@@ -53,8 +49,10 @@ class Resper extends Seeker
      */
     public function default(...$args)
     {
-        var_export($args);
-        exit;
+        //trigger_error("auth::错误错误", E_USER_ERROR);
+        //Response::dump(Response::$current);
+        //Response::page("app/index/foo.php");
+        
     }
 
 
@@ -89,36 +87,68 @@ class Resper extends Seeker
     public function __get($key)
     {
         /**
-         * $resper->foo --> Resper::$params["foo"]
+         * $responder->foo --> Responder::$params["foo"]
          */
         if (!empty(self::$params)) {
             $ps = self::$params;
+            if ($key=="ctx") return $ps;
             if (isset($ps[$key])) return $ps[$key];
         }
 
         /**
-         * $resper->type 获取 当前响应者是 App / Module / Resper
+         * $responder->cls --> 返回 Responder::$params["responder"] 的 类名 不是全名
+         */
+        if ($key == "cls") {
+            $cls = Resper::clsname($this);
+            return $cls;
+        }
+
+        /**
+         * $responder->type 获取 当前响应者是 App / Module / Responder
          */
         if (!empty(self::$params) && $key=="type") {
-            $resperCls = self::$params["resper"];
-            $appcls = Rp::cls("App");
-            $modcls = Rp::cls("Module");
-            if (is_subclass_of($resperCls, $appcls)) return "App";
-            if (is_subclass_of($resperCls, $modcls)) return "Module";
-            return "Resper";
+            $responderCls = self::$params["responder"];
+            $appcls = Resper::cls("App");
+            $modcls = Resper::cls("Module");
+            if (is_subclass_of($responderCls, $appcls)) return "App";
+            if (is_subclass_of($responderCls, $modcls)) return "Module";
+            return "Responder";
         }
         
         return null;
     }
 
     /**
-     * 响应者创建 Response 响应实例
+     * !! Resper 核心方法
+     * 响应者创建 执行响应方法
      * @return Response 实例
      */
-    /*public function response()
+    public function response()
     {
+        //读取 响应者 响应方法参数
+        //响应者 == $this
+        $responder = $this->responder;  //self::$params["responder"]
+        $method = $this->method;        //self::$params["method"]
+        $uri = $this->uri;              //self::$params["uri"]
 
-    }*/
+        //检查响应方法
+        $result = null;
+        if (method_exists($this, $method)) {
+            $result = $this->$method(...$uri);
+        } else {
+            //响应方法不存在，通常不可能
+            //抛出错误
+            //trigger_error( ... );
+        }
+
+        //将 响应结果 写入 response 实例
+        $response = Response::current();
+        $response->setData($result);
+
+        //返回 response 实例
+        return $response;
+        
+    }
 
 
 
@@ -142,7 +172,7 @@ class Resper extends Seeker
     public static function has($cls)
     {
         //首先查找 web root 下的 resper 响应类
-        $wcls = Rp::cls($cls);
+        $wcls = Resper::cls($cls);
         if (!empty($wcls)) {
             if (is_subclass_of($wcls, self::class)) return $wcls;
         }
@@ -156,7 +186,7 @@ class Resper extends Seeker
             $mcls[] = $mdn."/".$cls;
         }
         @closedir($mdh);
-        $mcls = Rp::cls(...$mcls);
+        $mcls = Resper::cls(...$mcls);
         if (!empty($mcls)) {
             if (is_subclass_of($mcls, self::class)) return $mcls;
         }

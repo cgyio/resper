@@ -6,11 +6,11 @@
 
 namespace Cgy;
 
+use Cgy\Resper;
+use Cgy\Response;
 use Cgy\util\Is;
 use Cgy\util\Arr;
 use Cgy\util\Path;
-use Cgy\Resper;
-use Atto\Box\Response;
 
 
 class Error
@@ -222,13 +222,13 @@ class Error
 		$err = self::create($errno, $errfile, $errline, $cls[0], $cls[1], $msg);
         if (!is_null($err) && $err instanceof Error) {
             if ($err->mustThrow()) {
-                //Response::current()->throwError($err);
-                var_dump("throw error");
-                var_dump($err);
+                Response::current()->throwError($err);
+                //var_dump("throw error");
+                //var_dump($err);
             } else {
-                //Response::current()->setError($err);
-                var_dump("set error");
-                var_dump($err);
+                Response::current()->setError($err);
+                //var_dump("set error");
+                //var_dump($err);
             }
         }
 	}

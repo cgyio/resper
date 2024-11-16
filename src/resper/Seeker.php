@@ -6,9 +6,10 @@
 
 namespace Cgy\resper;
 
-use Cgy\Resper as Rp;
+use Cgy\Resper;
+use Cgy\resper\Responder;
 use Cgy\request\Url;
-use Cgy\Response;
+//use Cgy\Response;
 use Cgy\App;
 use Cgy\Module;
 use Cgy\Event;
@@ -24,7 +25,7 @@ class Seeker
     //本次会话调用的 响应者参数
     public static $params = [
         /*
-        "resper"    => 响应者 类全称
+        "responder" => 响应者 类全称
         "method"    => 响应方法 实例 public 方法
         "uri"       => 本次响应的 URI 参数数组 即 URI 路径
         */
@@ -37,33 +38,33 @@ class Seeker
     /**
      * !! 核心方法
      * 查找当前会话的 响应者
-     * @return Resper 实例
+     * @return Responder 实例
      */
     public static function current()
     {
         $params = self::seek();
         self::$params = $params;
-        $resperCls = $params["resper"];
-        $resper = new $resperCls();
-        $rtype = $resper->type;
-        self::$current = $resper;
+        $responderCls = $params["responder"];
+        $responder = new $responderCls();
+        $rtype = $responder->type;
+        self::$current = $responder;
 
         /**
          * 触发 resper-created 事件
          */
-        Event::trigger("resper-created", $resper, $resper->type);
+        Event::trigger("responder-created", $responder, $responder->type);
 
-        return $resper;
+        return $responder;
     }
 
     /**
      * !! 核心方法
      * 根据 Request::$current->url->path 查询响应此 request 的 类/方法
-     * 可以响应的类：App类 / module类 / Resper类(route类)
+     * 可以响应的类：App类 / module类 / Responder类(route类)
      * @param Array $uri URI 路径，不指定则使用 url->path
      * @return Array 得到的目标 类，方法，uri参数，未找到 返回 null
      * 结构：[
-     *          "resper"    => 类全称 or 类实例
+     *          "responder" => 类全称 or 类实例
      *          "method"    => 响应方法，类实例的 public 方法
      *          "uri"       => 处理后，用作方法参数的 剩余 URI 路径数组
      *      ]
@@ -81,10 +82,11 @@ class Seeker
         /**
          * 默认的 响应类 / 方法
          * 如果存在 app/index 则调用 \App\Index::empty()
-         * 否则调用 \response\Respond::empty() 
+         * 否则调用 \resper\Responder::empty() 
          * 
          */
-        $resper = Rp::cls("resper/Resper");
+        $responderCls = Resper::cls("resper/Responder");
+        $responder = $responderCls;
         $method = "empty";
 
         /**
@@ -93,10 +95,10 @@ class Seeker
         if (empty($uri)) {
             if (false !== ($appcls = App::has("index"))) {
                 //如果存在 app/index 则调用 \App\Index::empty()
-                $resper = $appcls;
+                $responder = $appcls;
             }
             return [
-                "resper"    => $resper,
+                "responder" => $responder,
                 "method"    => $method,
                 "uri"       => []
             ];
@@ -108,33 +110,33 @@ class Seeker
         $cls = App::has($uri[0]);
         $ma = [];
         if ($cls !== false) {
-            $resper = $cls;
+            $responder = $cls;
             $ma = self::seekMethod($cls, array_slice($uri, 1));
         } else {
             $cls = Module::has($uri[0]);
             if ($cls !== false) {
-                $resper = $cls;
+                $responder = $cls;
                 $ma = self::seekMethod($cls, array_slice($uri, 1));
             }
         }
         if (!empty($ma)) {
             return [
-                "resper"    => $resper,
+                "responder" => $responder,
                 "method"    => $ma[0],
                 "uri"       => $ma[1]
             ];
         }
 
         /**
-         *  2  判断是否 resper\Resper 类 (相当于 route 类)
+         *  2  判断是否 resper\Responder 类 (相当于 route 类)
          */
-        $rpd = Resper::has($uri[0]);
+        $rpd = Responder::has($uri[0]);
         if (false !== $rpd) {
-            $resper = $rpd;
+            $responder = $rpd;
             $ma = self::seekMethod($rpd, array_slice($uri, 1));
             if (!empty($ma)) {
                 return [
-                    "resper"    => $resper,
+                    "responder" => $responder,
                     "method"    => $ma[0],
                     "uri"       => $ma[1]
                 ];
@@ -146,11 +148,11 @@ class Seeker
          */
         $app = App::has("index");
         if (false !== $app) {
-            $resper = $app;
+            $responder = $app;
             $ma = self::seekMethod($app, $uri);
             if (!empty($ma)) {
                 return [
-                    "resper"    => $resper,
+                    "responder" => $responder,
                     "method"    => $ma[0],
                     "uri"       => $ma[1]
                 ];
@@ -158,23 +160,22 @@ class Seeker
         }
 
         /**
-         *  4  判断是否 resper/Resper 基类中的 某个 public 方法
+         *  4  判断是否 resper/Responder 基类中的 某个 public 方法
          */
-        $rpd = Rp::cls("resper/Resper");
         $ma = self::seekMethod($rpd, $uri);
         if (!empty($ma)) {
             return [
-                "resper"    => $rpd,
+                "responder" => $responderCls,
                 "method"    => $ma[0],
                 "uri"       => $ma[1]
             ];
         }
 
         /**
-         *  5  全部失败，调用 resper/Resper::error()
+         *  5  全部失败，调用 resper/Responder::error()
          */
         return [
-            "resper"    => Rp::cls("resper/Resper"),
+            "responder" => $responderCls,
             "method"    => "error",
             "uri"       => $uri
         ];
@@ -191,7 +192,7 @@ class Seeker
     public static function seekMethod($cls, $uri = [])
     {
         //如果 $cls 不是 Respond 子类，返回 null
-        if (!is_subclass_of($cls, Rp::cls("resper/Resper"))) return null;
+        if (!is_subclass_of($cls, Resper::cls("resper/Responder"))) return null;
         //空 uri
         if (!Is::nemarr($uri) || !Is::indexed($uri)) {
             return ["empty", []];
@@ -215,8 +216,8 @@ class Seeker
      * @param Mixed $data 要输出的数据，不指定则调用 Resper::$params["method"] 指定的方法生成输出数据
      * @return Response 实例
      */
-    public static function response($data = null)
+    public static function __response($data = null)
     {
-        $response = Response::current();
+        //$response = Response::current();
     }
 }

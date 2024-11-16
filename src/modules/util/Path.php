@@ -128,7 +128,8 @@ class Path extends Util
         $appDir = [];
         if (!empty($inDir)) {
             $parr = explode(DS, $path);
-            if (strtolower($parr[0]) == "app" || !is_null(cls("App/".ucfirst(strtolower($parr[0]))))) {
+            //if (strtolower($parr[0]) == "app" || !is_null(Resper::cls("App/".ucfirst(strtolower($parr[0]))))) {
+            if (strtolower($parr[0]) == "app" || is_dir(APP_PATH.strtolower($parr[0]))) {
                 if (strtolower($parr[0]) == "app") array_shift($parr);
                 if (is_dir(APP_PATH.DS.$parr[0])) {
                     $app = array_shift($parr);

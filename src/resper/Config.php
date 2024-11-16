@@ -98,7 +98,8 @@ class Config extends Configer
             "formats"   => "pause,html,page,json,xml,str,dump",
             "format"    => "html",
             "lang"      => "zh-CN",     //输出语言
-            "psr7"      => false,		//是否以Psr-7标准返回响应
+            "psr7"      => false,		//是否允许以Psr-7标准返回响应
+            "errpage"   => "errorPage", //错误页面名称
         ],
 
         /**
@@ -330,10 +331,10 @@ class Config extends Configer
         //定义常量 无前缀
         //self::def($this->ctx("module"), "");
         //订阅一次性事件
-        /*Event::addHandlerOnce("resper-created", $this, function($resper, $rtype) {
+        /*Event::addHandlerOnce("responder-created", $this, function($responder, $rtype) {
             var_dump("Event resper-created triggered !!");
             var_dump($this);
-            var_dump($resper);
+            var_dump($responder);
             var_dump($rtype);
         });*/
         

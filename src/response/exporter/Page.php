@@ -1,15 +1,15 @@
 <?php
-/*
- * Attobox Framework / Response Exporter
- * export by require php page in page dir
+/**
+ * cgyio/resper Response 输出类
+ * Page 输出类
  */
 
-namespace Atto\Box\response\exporter;
+namespace Cgy\response\exporter;
 
-use Atto\Box\response\Exporter;
-use Atto\Box\Request;
-use Atto\Box\Response;
-use Atto\Box\Router;
+use Cgy\response\Exporter;
+use Cgy\Response;
+use Cgy\Request;
+use Cgy\util\Is;
 
 class Page extends Exporter
 {
@@ -19,7 +19,7 @@ class Page extends Exporter
     public function prepare()
     {
         $page = $this->data["data"];
-        if (!is_notempty_str($page)) {
+        if (!Is::nemstr($page)) {
             var_dump($page);
             exit;
         }
@@ -30,13 +30,13 @@ class Page extends Exporter
         
         $_Request = Request::current();
         $_Response = $this->response;
-        $_Router = Router::current();
+        //$_Router = Router::current();
         $_Params = [];
 
         $vars = get_object_vars($this->response);
-        $dps = Response::getDefaultParams();
+        //$dps = Response::getDefaultParams();
         foreach ($vars as $k => $v) {
-            if (!isset($dps[$k])) {
+            if (!isset($_Params[$k])) {
                 $_Params[$k] = $v;
                 $$k = $v;
             }

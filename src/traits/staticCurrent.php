@@ -16,9 +16,9 @@ trait staticCurrent
     //public static $current = null;
 
     //生成默认实例
-    public static function current()
+    public static function current(...$args)
     {
-        if (is_null(self::$current)) self::$current = new self();
+        if (is_null(self::$current)) self::$current = new self(...$args);
         return self::$current;
     }
 }

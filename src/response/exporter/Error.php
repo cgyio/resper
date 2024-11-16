@@ -1,13 +1,13 @@
 <?php
-/*
- * Attobox Framework / Response Exporter
- * throw error
+/**
+ * cgyio/resper Response 输出类
+ * Error 错误输出类
  */
 
-namespace Atto\Box\response\exporter;
+namespace Cgy\response\exporter;
 
-use Atto\Box\response\Exporter;
-use Atto\Box\Response;
+use Cgy\response\Exporter;
+use Cgy\Response;
 
 class Error extends Exporter
 {
@@ -35,9 +35,11 @@ class Error extends Exporter
     //改写export方法
     public function export()
     {
-        $format = Response::exportFormat();
-        $exp = Response::exporterClass($format);
-        $exporter = new $exp($this->response);
+        //$format = Response::exportFormat();
+        //$exp = Response::exporterClass($format);
+        //$exporter = new $exp($this->response);
+        $response = $this->response;
+        $exporter = Exporter::create($response);
         $exporter->prepare();
         $exporter->data = $this->data;
         $exporter->export();

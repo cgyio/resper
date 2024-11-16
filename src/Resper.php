@@ -13,44 +13,65 @@ require_once(__DIR__."/../../../autoload.php");
 //require_once("resper/functions.php");
 
 use Cgy\resper\Config;
-use Cgy\resper\Resper as Rper;
+use Cgy\resper\Responder;
 use Cgy\Error;
 use Cgy\Request;
 use Cgy\request\Url;
-use Cgy\Response;
+//use Cgy\Response;
 use Cgy\response\Respond;
 use Cgy\util\Path;
 use Cgy\util\Arr;
 use Cgy\util\Str;
 use Cgy\util\Is;
 
+use Cgy\traits\staticCurrent;
+
 class Resper 
 {
+    //引入trait
+    use staticCurrent;
+
     /**
-     * config
-     * 处理后的 运行时 config
+     * current
      */
-    public static $config = null;
+    public static $current = null;
+
+    /**
+     * config 设置类
+     */
+    public $config = null;
 
     /**
      * 核心类实例缓存
      * 按创建的先后顺序
      */
     //请求实例
-    public static $request = null;
+    public $request = null;
     //响应者实例
-    public static $resper = null;
+    public $responder = null;
     //响应实例
-    public static $response = null;
+    public $response = null;
     //解析得到的 respond 响应类
-    //public static $respond = null;
+    //public $respond = null;
     //如果响应类是 app 则缓存 app 实例
-    //public static $app = null;
+    //public $app = null;
+
+    /**
+     * 构造
+     * @param Array $opt Resper 框架启动参数，来自引用页面用户输入
+     *      参数格式 like 设置类 \resper\Config::$init
+     * @return void
+     */
+    public function __construct($opt = [])
+    {
+        //应用 用户设置 并初始化
+        $this->config = new Config($opt);
+    }
 
     
 
     /**
-     * 框架启动
+     * !! 框架启动 入口方法
      * @param Array $opt 用户自定义参数
      * @return void;
      */
@@ -59,20 +80,13 @@ class Resper
         @ob_start();
         @session_start();
 
-        //应用 用户设置 并初始化
-        self::$config = new Config($opt);
+        //创建框架实例 单例 Resper::$current = $Resper
+        $Resper = self::current($opt);
 
         //patch composer autoload
         self::patchAutoload();
 
-        /*var_export(self::$config->ctx());
-        var_export(self::$config::$cnsts);
-        var_export(self::$config->app->index);
-        var_export(WEB_ALI_SSLCHECK);
-        var_export(DIR_MODEL);
-        exit;*/
-
-        //应用 errorHandler
+        //应用 errorHandler 自定义错误处理
         Error::setHandler();
 
         /**
@@ -80,15 +94,20 @@ class Resper
          */
         
         //创建 Request 请求实例
-        self::$request = Request::current();
-        var_dump(self::$request->header->origin);
+        $Resper->request = Request::current();
+        //var_dump($Resper->request->header->origin);
         
-        //查找并创建响应者 Resper 实例
-        self::$resper = Rper::current();
-        var_dump(self::$resper);
+        //查找并创建响应者 Responder 实例
+        $Resper->responder = Responder::current();
+        //var_dump($Resper->responder->ctx);
+        //var_dump($Resper->responder->type);
 
-        //由响应者实例 创建 Response 响应实例
-        self::$response = Rper::response();
+        //创建 Response 响应实例
+        $Resper->response = Response::current();
+        //var_dump($Resper->response->exporter);
+
+        //响应者执行响应方法
+        $Resper->responder->response();
 
 
         exit;
@@ -143,7 +162,7 @@ class Resper
 
 
     /**
-     * tools
+     * static tools
      */
 
     /**
