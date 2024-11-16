@@ -42,6 +42,9 @@ class Seeker
      */
     public static function current()
     {
+        $scls = self::class;
+        if (self::$current instanceof $scls) return self::$current;
+
         $params = self::seek();
         self::$params = $params;
         $responderCls = $params["responder"];

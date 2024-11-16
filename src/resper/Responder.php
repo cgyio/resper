@@ -49,10 +49,15 @@ class Responder extends Seeker
      */
     public function default(...$args)
     {
-        //trigger_error("auth::错误错误", E_USER_ERROR);
-        //Response::dump(Response::$current);
-        //Response::page("app/index/foo.php");
-        
+        //Response::dump($this->path);
+        //trigger_error("php::这是错误说明，可以很长很长，for English path/foo/bar，Responder->path == ".$this->path, E_USER_ERROR);
+        //Resper::foo();
+        Response::code(500);
+
+        return [
+            "foo" => "bar",
+            "tom" => "jaz"
+        ];
     }
 
 
@@ -104,6 +109,17 @@ class Responder extends Seeker
         }
 
         /**
+         * $responder->path 获取 响应者类 所在路径前缀
+         * 通常用于查找 响应者路径下文件
+         */
+        if ($key == "path") {
+            $cls = self::$params["responder"];
+            $clp = str_replace(NS, "", $cls);
+            $clp = str_replace("\\", "/", $clp);
+            return strtolower($clp);
+        }
+
+        /**
          * $responder->type 获取 当前响应者是 App / Module / Responder
          */
         if (!empty(self::$params) && $key=="type") {
@@ -131,7 +147,7 @@ class Responder extends Seeker
         $method = $this->method;        //self::$params["method"]
         $uri = $this->uri;              //self::$params["uri"]
 
-        //检查响应方法
+        //执行响应方法
         $result = null;
         if (method_exists($this, $method)) {
             $result = $this->$method(...$uri);
@@ -139,6 +155,7 @@ class Responder extends Seeker
             //响应方法不存在，通常不可能
             //抛出错误
             //trigger_error( ... );
+
         }
 
         //将 响应结果 写入 response 实例

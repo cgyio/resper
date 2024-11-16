@@ -7,9 +7,12 @@
 namespace Cgy\response\exporter;
 
 use Cgy\Resper;
+use Cgy\resper\Responder;
 use Cgy\response\Exporter;
 use Cgy\Response;
+use Cgy\util\Is;
 use Cgy\util\Str;
+use Cgy\util\Conv;
 use Cgy\util\Path;
 
 class Html extends Exporter
@@ -29,15 +32,8 @@ class Html extends Exporter
             //调用 系统错误页面，在这些路径中查找 $epn.php 中查找
             $pgps = [];
             $epn = EXPORT_ERRPAGE.EXT;
-            $resper = Resper::current();
-            $responder = $resper->responder;
-            $rtp = $responder->type;
-            $rnm = $responder->cls;
-            if ($rtp == "App") {
-                $pgps[] = "app/".strtolower($rnm)."/".$epn;
-            } else {
-                $pgps[] = "module/".strtolower($rnm)."/".$epn;
-            }
+            $rdp = Responder::current()->path;
+            $pgps[] = $rdp."/".$epn;
             $pgps[] = "root/".$epn;
             $pgps[] = "resper/error/".$epn;
             $errpage = Path::exists($pgps,[
@@ -57,10 +53,10 @@ class Html extends Exporter
             if (empty($d)) {
                 $this->content = "";
             } else {
-                if (is_associate($d)) {
-                    $this->content = a2j($d);
+                if (Is::associate($d)) {
+                    $this->content = Conv::a2j($d);
                 } else {
-                    $this->content = str($d);
+                    $this->content = Str::mk($d);
                 }
             }
             //var_dump($this->content);

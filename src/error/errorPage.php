@@ -10,23 +10,25 @@
 <style>
 * {
     --color-bg: #faf9f7;
-    --color-bd: #f0cfcd;
+    --color-bd: #f0efed;
+    --color-bd-err: #f0afad;
     --color-fc: #636260;
     --color-fc-dark: #333230;
+    --color-fc-light: #a3a2a0;
 
     margin:0; padding:0; font-family:monospace; font-size:14px;
 }
 body {
     width: 100vw; height: 100vh; overflow: hidden;
-    display: flex; align-items: center; justify-content: center;
+    display: flex; align-items: flex-start; justify-content: center;
     background-color: var(--color-bg);
-    color: var(--color-fc);
+    color: var(--color-fc-light);
 }
 .err_panel {
-    width: 40vw; min-width: 480px; height: auto; padding: 32px; margin: 0;
+    width: 40vw; min-width: 480px; height: auto; padding: 32px; margin-top: 15vh;
     display: flex; flex-direction: column;
     box-sizing: border-box;
-    border: var(--color-bd) solid 1px; border-radius: 6px;
+    border: var(--color-bd-err) solid 1px; border-radius: 16px;
     background-color: #fff;
     box-shadow: 4px 6px 16px rgba(0,0,0,.1);
 }
@@ -61,7 +63,7 @@ body {
 }
 .err_panel > .err_row > label {
     width: 64px; margin-left: 80px; margin-right: 8px;
-    font-weight: bold; color: var(--color-fc-dark);
+    font-weight: bold; color: var(--color-fc);
 }
 </style>
 </head>

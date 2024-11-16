@@ -233,6 +233,34 @@ class Error
         }
 	}
 
+	/**
+	 * PHP Fatal Error handler
+	 * 致命错误必须抛出
+	 */
+	public static function fatalHandler() 
+	{
+		$err_last = error_get_last();
+		var_dump($err_last);
+		$cls = [ Resper::cls("error/base"), "fatal" ];
+		$file = $err_last["file"];
+		$line = $err_last["line"];
+		$msg = $err_last["message"];
+		$err = self::create(9999, $file, $line, $cls[0], $cls[1], $msg);
+		//var_dump($err);
+		if (!is_null($err) && $err instanceof Error) {
+            if ($err->mustThrow()) {
+				//var_dump(Response::current());
+                Response::current()->throwError($err);
+                //var_dump("throw error");
+                //var_dump($err);
+            } else {
+                Response::current()->setError($err);
+                //var_dump("set error");
+                //var_dump($err);
+            }
+        }
+	}
+
 	//注册 set_error_handler
 	public static function setHandler($callable = null)
 	{
@@ -241,6 +269,9 @@ class Error
 		} else {
 			set_error_handler([static::class, "handler"]);
 		}
+
+		//Fatal Error
+		//register_shutdown_function([self::class, "fatalHandler"]);
 	}
 
 

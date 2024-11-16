@@ -109,6 +109,8 @@ class Resper
         //响应者执行响应方法
         $Resper->responder->response();
 
+        //Response 调用输出类 输出结果
+        $Resper->response->export();
 
         exit;
     }
