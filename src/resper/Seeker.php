@@ -16,6 +16,7 @@ use Cgy\Event;
 use Cgy\util\Is;
 use Cgy\util\Arr;
 use Cgy\util\Cls;
+use Cgy\util\Path;
 
 class Seeker 
 {
@@ -106,6 +107,22 @@ class Seeker
                 "uri"       => []
             ];
         }
+
+        /**
+         *  0  判断是否存在真实文件(非 php)
+         */
+        /*$fp = implode("/", $uri);
+        if (strpos($fp, EXT) === false) {
+            $fs = [
+                "app/".$fp,
+                "root/".$fp,
+                "resper/".$fp,
+            ];
+            $fn = Path::exists($fs, ["inDir"=>"asset"]);
+            if (Is::nemstr($fn) && file_exists($fn)) {
+
+            }
+        }*/
 
         /**
          *  1  判断是否存在 app / module 类

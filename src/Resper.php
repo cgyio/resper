@@ -95,16 +95,12 @@ class Resper
         
         //创建 Request 请求实例
         $Resper->request = Request::current();
-        //var_dump($Resper->request->header->origin);
         
         //查找并创建响应者 Responder 实例
         $Resper->responder = Responder::current();
-        //var_dump($Resper->responder->ctx);
-        //var_dump($Resper->responder->type);
 
         //创建 Response 响应实例
         $Resper->response = Response::current();
-        //var_dump($Resper->response->exporter);
 
         //响应者执行响应方法
         $Resper->responder->response();

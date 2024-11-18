@@ -88,6 +88,8 @@ class Response
         $this->header = new Header();
         //是否暂停响应
         $this->paused = $this->request->pause && !$this->responder->unpause;
+        //是否允许以 PSR-7 标准输出
+        $this->psr7 = EXPORT_PSR7;
 
         /**
          * 暂停响应
@@ -104,7 +106,7 @@ class Response
          */
         //从 url 中输入可能存在的 format 参数
         $this->setFormat();
-        $this->psr7 = EXPORT_PSR7;
+
     }
 
 
@@ -143,11 +145,10 @@ class Response
     {
         $exporter = Exporter::create($this);
         $exporter->prepare();
-        //var_dump($this->info());
 
         if ($this->psr7 == true || $usePsr7 == true) {
             $status = $this->status;
-            $headers = $this->headers;
+            $headers = $this->header->context;
             $body = $exporter->content;
             $protocol = $this->protocol;
             $response = new Psr7\Response($status, $headers, $body, $protocol);

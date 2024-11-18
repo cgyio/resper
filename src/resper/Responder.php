@@ -50,7 +50,7 @@ class Responder extends Seeker
     public function default(...$args)
     {
         //Response::dump($this->path);
-        //trigger_error("php::这是错误说明，可以很长很长，for English path/foo/bar，Responder->path == ".$this->path, E_USER_ERROR);
+        trigger_error("php::这是错误说明，可以很长很长，for English path/foo/bar，Responder->path == ".$this->path, E_USER_ERROR);
         //Resper::foo();
         Response::code(500);
 

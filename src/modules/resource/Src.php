@@ -7,13 +7,13 @@
 
 namespace Cgy\resource;
 
-use Cgy\resper\Resper;
+use Cgy\resper\Responder;
 
-class Src extends Resper 
+class Src extends Responder 
 {
 
 
-    public function foo() {
-
+    public function foo(...$args) {
+        return implode("/", $args);
     }
 }
