@@ -22,8 +22,7 @@ class Responder extends Seeker
     /**
      * 响应者实例参数
      */
-
-    //
+    
     /**
      * 响应类(路由类)信息
      * !! 子类必须覆盖
@@ -73,7 +72,7 @@ class Responder extends Seeker
 
     /**
      * responder 类 内部 文件/路径 查找
-     * !! 子类覆盖
+     * !! 子类可覆盖
      * @param String $path 文件/路径
      * @param Mixed $params 
      *      Array   Path::find() 方法的 第二参数
@@ -172,7 +171,7 @@ class Responder extends Seeker
      */
     public function __get($key)
     {
-        if (!empty(self::$params) && Is::nemarr(self::$params)) {
+        if (!empty(self::$params) && Is::associate(self::$params)) {
             $ps = self::$params;
             $cls = $ps["responder"];
 
@@ -256,8 +255,7 @@ class Responder extends Seeker
 
         //对此响应者 进行权限控制
         if ($this->uac==true) {
-            //!! 权限检查，无权限则 trigger_error
-            //TODO:
+            //TODO: 权限检查，无权限则 trigger_error
             //...
 
         }

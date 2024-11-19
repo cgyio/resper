@@ -58,7 +58,8 @@ class Src extends Responder
         //资源查询路径
         $path = implode("/", $args);
         $path = trim(Str::replace([DS, "\\"], "/", $path), "/");
-        var_dump($path);
+        //var_dump($path);
+        return $path;
 
         //查找资源 创建 Resource 实例
         //$resource = 

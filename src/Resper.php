@@ -18,7 +18,7 @@ use Cgy\Error;
 use Cgy\Request;
 use Cgy\request\Url;
 //use Cgy\Response;
-use Cgy\response\Respond;
+//use Cgy\response\Respond;
 use Cgy\util\Path;
 use Cgy\util\Arr;
 use Cgy\util\Str;
@@ -51,10 +51,6 @@ class Resper
     public $responder = null;
     //响应实例
     public $response = null;
-    //解析得到的 respond 响应类
-    //public $respond = null;
-    //如果响应类是 app 则缓存 app 实例
-    //public $app = null;
 
     /**
      * 构造

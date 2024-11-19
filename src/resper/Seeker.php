@@ -96,7 +96,7 @@ class Seeker
         $method = "empty";
 
         /**
-         * URI 为空，返回默认响应
+         *  0  URI 为空，返回默认响应
          */
         if (empty($uri)) {
             if (false !== ($appcls = App::has("index"))) {
@@ -109,22 +109,6 @@ class Seeker
                 "uri"       => []
             ];
         }
-
-        /**
-         *  0  判断是否存在真实文件(非 php)
-         */
-        /*$fp = implode("/", $uri);
-        if (strpos($fp, EXT) === false) {
-            $fs = [
-                "app/".$fp,
-                "root/".$fp,
-                "resper/".$fp,
-            ];
-            $fn = Path::exists($fs, ["inDir"=>"asset"]);
-            if (Is::nemstr($fn) && file_exists($fn)) {
-
-            }
-        }*/
 
         /**
          *  1  判断是否存在 app / module 类
@@ -213,7 +197,7 @@ class Seeker
      */
     public static function seekMethod($cls, $uri = [])
     {
-        //如果 $cls 不是 Respond 子类，返回 null
+        //如果 $cls 不是 Responder 子类，返回 null
         if (!is_subclass_of($cls, Resper::cls("resper/Responder"))) return null;
 
         //空 uri
