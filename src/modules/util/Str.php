@@ -99,14 +99,26 @@ class Str extends Util
 
     /**
      * 字符串(正则) 替换
-     * @param String $search 要查找的 字符串 或 正则
+     * @param String $search 要查找的 字符串 或 正则 可以是数组
      * @param String $replace 要替换为新字符串
      * @param String $str
      * @return String
      */
     public static function replace($search, $replace, $str)
     {
-        if (substr($search, 0, 1) == "/") {
+        //[ search, search, ...]
+        if (Is::nemarr($search)) {
+            for($i=0;$i<count($search);$i++) {
+                if (!Is::nemstr($search[$i])) continue;
+                $str = self::replace($search[$i], $replace, $str);
+            }
+            return $str;
+        }
+        //search != string
+        if (!Is::nemstr($search)) return $str;
+
+        //执行替换
+        if (strlen($search)>2 && substr($search, 0, 1) == "/" && substr($search, -1) == "/") {
             return preg_replace($search, $replace, $str);
         } else {
             return str_replace($search, $replace, $str);
@@ -184,6 +196,46 @@ class Str extends Util
     {
         if (!Is::nemstr($str) || !Is::nemstr($var)) return false;
         return false !== strpos($str, $var);
+    }
+
+    /**
+     * 判断 是否包含 给定 字符串 中的任意一个
+     * @param String $str
+     * @param Array $vars 要查找的字符串数组
+     * @return Bool
+     */
+    public static function hasAny($str, ...$vars)
+    {
+        if (!Is::nemstr($str)) return false;
+        $flag = false;
+        foreach ($vars as $i => $var) {
+            if (!Is::nemstr($var)) continue;
+            if (false !== strpos($str, $var)) {
+                $flag = true;
+                break;
+            }
+        }
+        return $flag;
+    }
+
+    /**
+     * 判断 是否包含 全部 给定的字符串
+     * @param String $str
+     * @param Array $vars 要查找的字符串数组
+     * @return Bool
+     */
+    public static function hasAll($str, ...$vars)
+    {
+        if (!Is::nemstr($str)) return false;
+        $flag = true;
+        foreach ($vars as $i => $var) {
+            if (!Is::nemstr($var)) return false;
+            if (false === strpos($str, $var)) {
+                $flag = false;
+                break;
+            }
+        }
+        return $flag;
     }
 
     /**

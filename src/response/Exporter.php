@@ -38,8 +38,12 @@ class Exporter
     public function __construct($response = null) 
     {
         $this->response = $response;
-        if ($this->contentType != "") $this->response->setHeaders("Content-Type", $this->contentType);
-        if (is_null($this->data)) $this->data = array_merge(self::$default, []);
+        if ($this->contentType != "") {
+            $this->response->header->set("Content-Type", $this->contentType);
+        }
+        if (is_null($this->data)) {
+            $this->data = array_merge(self::$default, []);
+        }
         $this->data["data"] = $this->response->data;
         $this->prepareError();
     }
@@ -86,7 +90,7 @@ class Exporter
     public function export()
     {
         //$this->prepare();
-        $this->response->sentHeaders();
+        $this->response->header->sent();
         //var_dump($this->response);
         echo $this->content;
         //return $this->content;

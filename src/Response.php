@@ -10,6 +10,7 @@ use Cgy\Resper;
 use Cgy\Request;
 use Cgy\response\Header;
 use Cgy\response\Exporter;
+use Cgy\Mime;
 use Cgy\util\Is;
 use Cgy\util\Arr;
 use Cgy\util\Path;
@@ -27,14 +28,14 @@ class Response
     public static $current = null;
 
     //默认 response 参数
-    private static $defaultParams = [
+    /*private static $defaultParams = [
         "status" => 0,
         "headers" => [],
         "protocol" => "",
         "data" => null,
         "format" => "",
         "errors" => []
-    ];
+    ];*/
 
     //Resper 框架实例
     public $resper = null;
@@ -109,33 +110,6 @@ class Response
 
     }
 
-
-
-    /**
-     * 生成 response 参数
-     * @param Mixed $data 要输出的 内容
-     * @param Array $params 额外的 response 参数
-     * @return Response
-     */
-    public function create($data = null, $params = [])
-    {
-        $req = $this->request;
-        $rpr = $this->resper;
-        
-        if ($req->pause && !$rpr->unpause) {
-            //WEB_PAUSE == true 网站已暂停 且 响应者接收 WEB_PAUSE 参数控制
-            $params = Arr::extend($params, [
-                "format" => "pause",
-                "data" => null,
-                "extra" => "额外的属性" 
-            ]);
-        } else {
-            //$data = $this->rou->run();
-            $params = self::createParams($data, $params);
-        }
-        return $this->setParams($params);
-    }
-
     /**
      * 输出
      * @param Bool $usePsr7 是否使用 PSR-7 标准输出
@@ -162,7 +136,9 @@ class Response
     }
 
     /**
-     * throw error
+     * throw error 抛出错误
+     * @param Error $error 错误实例
+     * @return Exit
      */
     public function throwError($error = null)
     {
@@ -198,18 +174,6 @@ class Response
     {
         $this->status = (int)$code;
         return $this->setExporter();
-    }
-
-    /**
-     * 设定 headers
-     * @param Mixed $key 键名 或 [ associate ]
-     * @param Mixed $val 参数内容
-     * @return Response
-     */
-    public function setHeaders($key = [], $val = null)
-    {
-        $this->header->set($key, $val);
-        return $this;
     }
 
     /**
@@ -320,7 +284,7 @@ class Response
         if (isset($params["headers"])) {
             $hds = $params["headers"];
             if (Is::nemarr($hds) && Is::associate($hds)) {
-                $this->setHeaders($hds);
+                $this->header->set($hds);
             }
             unset($params["headers"]);
         }
@@ -349,20 +313,6 @@ class Response
         return $this;
     }
 
-
-
-    /**
-     * 发送响应头
-     * @param Mixed $key 关联数组 或 键名
-     * @param Mixed $val 
-     * @return Response
-     */
-    public function sentHeaders($key = [], $val = null)
-    {
-        $this->header->sent($key, $val);
-        return $this;
-    }
-
     /**
      * response info
      * @return Array
@@ -370,7 +320,6 @@ class Response
     public function info()
     {
         $rtn = [];
-        //$keys = array_keys(self::$defaultParams);
         $keys = explode(",", "format,status,protocol,paused,psr7,data,errors,exporter,exportOnlyData");
         for ($i=0;$i<count($keys);$i++) {
             $ki = $keys[$i];
@@ -437,7 +386,6 @@ class Response
             return self::_export("page", $page, ...$args);
         }
 
-
         /**
          * Response::format() == call Response::_export()
          */
@@ -451,80 +399,37 @@ class Response
             return self::_export($format, ...$args);
         }
 
+        /**
+         * 
+         */
+
         return null;
     }
 
-    /*public static function json($data =  [], $params = [])
+    /**
+     * 不通过exporter，直接输出内容
+     * !! headers已经手动指定
+     * !! 通常 用于输出文件资源
+     * @param Mixed $content 要输出的文件内容，不一定是字符串，还可能是 二进制内容
+     * @param String $ext 可指定文件 ext，指定了 ext 则不需要手动写入 headers，默认 $ext==null 不指定 ext
+     * @param String $fn 如果要输出的文件需要下载，可指定文件名
+     */
+    public static function echo($content = "", $ext = null, $fn = "")
     {
-        return self::_export("json", $data, $params);
-    }
-
-    public static function str($str = "", $params = [])
-    {
-        return self::_export("str", $str, $params);
-    }
-    
-    public static function html($html = "", $params = [])
-    {
-        return self::_export("html", $html, $params);
-    }
-    
-    public static function dump(...$todump)
-    {
-        return self::_export("dump", count($todump)==1 ? $todump[0] : $todump);
-    }
-
-    public static function code($code = 404)
-    {
-        return self::$current->setStatus($code)->export();
-    }
-    
-    public static function page($path = "", $params = [])
-    {
-        $path = path_find($path, ["inDir"=>"page"]);
-        if (empty($path)) return self::code(404);
-        return self::_export("page", $path, $params);
-    }
-
-    public static function error($errmsg=[], $errtype="custom")
-    {
-        if (is_notempty_str($errmsg)) $errmsg = [$errmsg];
-        $errtit = $errtype."::".implode(",",$errmsg);
-        trigger_error($errtit, E_USER_ERROR);
-        exit;
-    }*/
-
-    public static function errpage($params = [])
-    {
-        $path = path_find("box/page/error.php");
-        $params = Arr::extend([
-            "title" => "发生错误",
-            "msg" => "发生错误"
-        ], $params);
-        return self::_export("page", $path, $params);
-    }
-    
-    public static function pause()
-    {
-        $pages = func_get_args();
-        $page = path_exists(array_merge($pages, [
-            "pause.php",
-            "cphp/pause.php"
-        ]));
-        if (empty($page)) return self::code(404);
-        return self::_export("page", $page, $params);
-    }
-
-    //不通过exporter，直接输出内容，headers已经手动指定
-    //用于输出文件资源
-    public static function echo($content = "")
-    {
-        self::headersSent();
+        if (Is::nemstr($ext)) {
+            Mime::setHeaders($ext, $fn);
+        }
+        self::sentHeaders();
         echo $content;
         exit;
     }
 
-    //header("Location:xxxx") 跳转
+    /**
+     * 重定向 header("Location:xxxx") 跳转
+     * @param String $url 跳转目标 url
+     * @param Bool $ob_clean 是否清空 输出缓冲区 默认 false
+     * @return Exit
+     */
     public static function redirect($url="", $ob_clean=false)
     {
         if (headers_sent() !== true) {
@@ -542,77 +447,21 @@ class Response
      */
 
     /**
-     * 静态调用 Response::$current->setHeaders
+     * 静态调用 Response::$current->header->set()
      * @return Response
      */
-    public static function headers()
+    public static function setHeaders(...$args)
     {
-        $args = func_get_args();
-        return self::$current->setHeaders(...$args);
+        return self::$current->header->set(...$args);
     }
 
     /**
-     * 静态调用 Response::$current->sentHeaders
+     * 静态调用 Response::$current->header->sent()
      * @return Response
      */
-    public static function headersSent()
+    public static function sentHeaders(...$args)
     {
-        $args = func_get_args();
-        return self::$current->sentHeaders(...$args);
-    }
-
-    /**
-     * 获取 format 对应的 exporter 类，返回类全名
-     * @return String | NULL
-     */
-    public static function getExporterClass($format = null)
-    {
-        if (is_notempty_str($format)) {
-            return cls("response/exporter/".ucfirst($format));
-        }
-        return null;
-    }
-
-    /**
-     * 将 route 运行结果 data 与 response params 合并，生成包含 data 的新 params
-     * @return Array
-     */
-    public static function createParams($data = [], $params = [])
-    {
-        if (is_associate($data) && !empty($data)) {
-            $ps = [];
-            foreach (self::$defaultParams as $k => $v) {
-                if (isset($data[$k])) {
-                    $ps[$k] = $data[$k];
-                    unset($data[$k]);
-                }
-            }
-            if (!empty($ps)) $params = Arr::extend($params, $ps);
-            if (!empty($data)) {
-                if (isset($params["data"]) && !empty($params["data"])) {
-                    /*if (is_associate($params["data"]) && is_associate($data)) {
-                        $params["data"] = Arr::extend($params["data"], $data);
-                    } else {
-                        $params["data"] = $data;
-                    }*/
-                    $params = Arr::extend($params, $data);
-                } else {
-                    $params["data"] = $data;
-                }
-            }
-        } else {
-            $params["data"] = $data;
-        }
-        return $params;
-    }
-
-    /**
-     * 获取 defaultParams
-     * @return Array
-     */
-    public static function getDefaultParams()
-    {
-        return self::$defaultParams;
+        return self::$current->header->sent(...$args);
     }
 
 }

@@ -109,13 +109,18 @@ class Path extends Util
         $path = "",     //要查找的文件或文件夹
         $options = []   //可选的参数
     ) {
-        if (file_exists($path) || is_dir($path)) return $path;
-        $path = trim(str_replace("/", DS, $path), DS);
         $options = Arr::extend([
             "inDir" => DIR_ASSET,
             "subDir" => "",
             "checkDir" => false
         ], $options);
+        if (file_exists($path)) {
+            if ($options["checkDir"]==false) return $path;
+        }
+        if (is_dir($path)) {
+            if ($options["checkDir"]==true) return $path;
+        }
+        $path = trim(str_replace("/", DS, $path), DS);
         $local = [];
 
         $subDir = $options["subDir"];
@@ -178,7 +183,8 @@ class Path extends Util
             "checkDir" => $checkDir
         ], $local);
         
-        //var_dump($local); exit;
+        //var_dump($local);
+        //exit;
         //break_dump("break_pathfind", $local);
         
         foreach ($local as $i => $v) {

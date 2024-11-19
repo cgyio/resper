@@ -50,13 +50,15 @@ class Seeker
         self::$params = $params;
         $responderCls = $params["responder"];
         $responder = new $responderCls();
-        $rtype = $responder->type;
+
+        //缓存 responder
         self::$current = $responder;
 
         /**
          * 触发 resper-created 事件
          */
-        Event::trigger("responder-created", $responder, $responder->type);
+        $rtype = $responder->type;
+        Event::trigger("responder-created", $responder, $rtype);
 
         return $responder;
     }
@@ -213,21 +215,22 @@ class Seeker
     {
         //如果 $cls 不是 Respond 子类，返回 null
         if (!is_subclass_of($cls, Resper::cls("resper/Responder"))) return null;
+
         //空 uri
         if (!Is::nemarr($uri) || !Is::indexed($uri)) {
             return ["empty", []];
         }
+
         //查找 响应方法
         $m = $uri[0];
         //响应方法必须是 实例方法/public方法
         $has = Cls::hasMethod($cls, $m, "public", function($mi) {
             return $mi->isStatic() === false;
         });
-        if ($has) {
-            return [ $m, array_slice($uri, 1) ];
-        } else {
-            return [ "default", $uri ];
-        }
+        if ($has) return [ $m, array_slice($uri, 1) ];
+
+        //未找到有效的 响应方法 则返回默认方法 default
+        return [ "default", $uri ];
     }
 
     /**

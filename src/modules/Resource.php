@@ -10,5 +10,8 @@ use Cgy\Module;
 
 class Resource extends Module 
 {
-    
+    public function default(...$args)
+    {
+        var_dump($this->path);
+    }
 }
