@@ -604,14 +604,23 @@ class Resper extends ResperBase
         $method = $this->method;    //self::$params["method"]
         $uri = $this->uri;          //self::$params["uri"]
 
-        //var_dump(self::$params);
-
         //对此响应者 进行权限控制
         if ($this->uac==true) {
             //TODO: 权限检查，无权限则 trigger_error
             //...
 
         }
+
+        //创建 Response 实例
+        $response = Response::current();
+
+        //检查 Resper::$config 是否包含了 response 额外参数
+        $conf = $this->conf;
+        $resps = $conf["response"] ?? [];
+        if (!empty($resps)) {
+            $response->setParams($resps);
+        }
+
 
         //执行响应方法
         $result = null;
@@ -625,7 +634,6 @@ class Resper extends ResperBase
         }
 
         //将 响应结果 写入 response 实例
-        $response = Response::current();
         $response->setData($result);
 
         //返回 response 实例

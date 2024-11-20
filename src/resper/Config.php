@@ -93,6 +93,7 @@ class Config extends Configer
         "export" => [
             "formats"   => "pause,html,page,json,xml,str,dump",
             "format"    => "html",
+            "ajax"      => "json",
             "lang"      => "zh-CN",     //输出语言
             "psr7"      => false,		//是否允许以Psr-7标准返回响应
             "errpage"   => "errorPage", //错误页面名称

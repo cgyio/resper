@@ -30,6 +30,7 @@ class Module extends Resper
         $mdcls = Cls::find("module/".$mdcln);
         if (empty($mdcls)) return false;
         if (!file_exists($mdf)) return false;
+        if (!is_subclass_of($mdcls, Cls::find("Resper"))) return false;
         return $mdcls;
     }
     

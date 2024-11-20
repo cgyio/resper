@@ -48,11 +48,11 @@ class Src extends Resper
         }
 
         //var_dump(Resper::$config->ctx());
-        trigger_error("res/miss::foo/bar", E_USER_ERROR);
+        //trigger_error("res/miss::foo/bar", E_USER_ERROR);
 
         //检查 预定义的路径别名
         $conf = $this->conf;
-        var_dump($conf);
+        //var_dump($conf);
         $alias = $conf["alias"] ?? [];
         if (isset($alias[strtolower($args[0])])) {
             $args[0] = $alias[strtolower($args[0])];
@@ -62,11 +62,16 @@ class Src extends Resper
         $path = implode("/", $args);
         $path = trim(Str::replace([DS, "\\"], "/", $path), "/");
         //var_dump($path);
-        return $path;
+        //return $path;
 
         //查找资源 创建 Resource 实例
-        //$resource = 
+        $resource = Resource::create($path);
+        //var_dump($resource);
+        if ($resource instanceof Resource) {
+            return $resource->export();
+        }
 
+        Response::code(404);
     }
 
 
