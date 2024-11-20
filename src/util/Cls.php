@@ -7,9 +7,77 @@
 namespace Cgy\util;
 
 use Cgy\Util;
+use Cgy\util\Is;
+use Cgy\util\Str;
+use Cgy\util\Arr;
 
 class Cls extends Util 
 {
+
+    /**
+     * 获取 类全称
+     * foo/bar  -->  NS\foo\Bar
+     * @param String $path      full class name
+     * @param String $ns        namespace 前缀 默认使用常量 NS
+     * @return Class            not found return null
+     */
+    public static function find($path = "", $ns = null)
+    {
+        if (!Is::nemstr($path) && !Is::nemarr($path)) return null;
+        $ns = !Is::nemstr($ns) ? (defined("NS") ? NS : "\\Cgy\\") : strtoupper($ns);
+        $ps = Is::nemstr($path) ? explode(",", $path) : $path;
+        $cl = null;
+        for ($i=0; $i<count($ps); $i++) {
+            //先判断一下
+            if (class_exists($ps[$i])) {
+                $cl = $ps[$i];
+                break;
+            }
+
+            $pi = trim($ps[$i], "/");
+            $pia = explode("/", $pi);
+            $pin = $pia[count($pia)-1];
+            if (!Str::beginUp($pin)) {
+                $pia[count($pia)-1] = ucfirst($pin);
+            }
+            $cls = $ns . implode("\\", $pia);
+            //var_dump($cls);
+            if (class_exists($cls)) {
+                $cl = $cls;
+                break;
+            }
+        }
+        return $cl;
+    }
+
+    /**
+     * 生成 类全称前缀
+     * foo/bar  -->  NS\foo\bar\
+     * @param String $path
+     * @return String
+     */
+    public static function pre($path = "")
+    {
+        $path = trim($path, "/");
+        return NS . str_replace("/","\\", $path) . "\\";
+    }
+
+    /**
+     * 获取不包含 namespace 前缀的 类名称
+     * NS\foo\bar  -->  bar
+     * @param Object $obj 类实例
+     * @return String
+     */
+    public static function name($obj)
+    {
+        try {
+            $cls = get_class($obj);
+            $carr = explode("\\", $cls);
+            return array_pop($carr);
+        } catch(Exception $e) {
+            return null;
+        }
+    }
     
     /**
      * 取得 ReflectionClass

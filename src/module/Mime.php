@@ -4,7 +4,7 @@
  * 文件类型 MIME
  */
 
-namespace Cgy;
+namespace Cgy\module;
 
 use Cgy\Response;
 use Cgy\util\Is;

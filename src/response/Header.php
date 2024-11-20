@@ -6,7 +6,7 @@
 
 namespace Cgy\response;
 
-use Cgy\Header as Hdr;
+use Cgy\module\Header as Hdr;
 use Cgy\Resper;
 use Cgy\Request;
 use Cgy\Response;

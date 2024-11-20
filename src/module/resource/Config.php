@@ -20,9 +20,9 @@
  * 
  */
 
-namespace Cgy\resource;
+namespace Cgy\module\resource;
 
-use Cgy\Configer;
+use Cgy\module\Configer;
 
 class Config extends Configer 
 {

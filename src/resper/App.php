@@ -7,10 +7,11 @@
 namespace Cgy;
 
 use Cgy\Resper;
-use Cgy\resper\Responder;
+//use Cgy\resper\Responder;
 use Cgy\util\Str;
+use Cgy\util\Cls;
 
-class App extends Responder
+class App extends Resper
 {
     /**
      * App info
@@ -68,7 +69,7 @@ class App extends Responder
     public static function has($app)
     {
         $appcln = Str::beginUp($app) ? $app : ucfirst($app);
-        $appcls = Resper::cls("App/$appcln");
+        $appcls = Cls::find("App/$appcln");
         if (empty($appcls)) return false;
         return $appcls;
     }

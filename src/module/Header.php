@@ -4,7 +4,7 @@
  * Request/Response Header 处理类
  */
 
-namespace Cgy;
+namespace Cgy\module;
 
 use Cgy\util\Server;
 use Cgy\util\Str;

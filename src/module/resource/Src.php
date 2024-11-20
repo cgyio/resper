@@ -5,24 +5,23 @@
  *      [host]/src/...
  */
 
-namespace Cgy\resource;
+namespace Cgy\module\resource;
 
 use Cgy\Resper;
-use Cgy\resper\Responder;
 use Cgy\Response;
-use Cgy\Resource;
+use Cgy\module\Resource;
 use Cgy\util\Is;
 use Cgy\util\Arr;
 use Cgy\util\Str;
 
-class Src extends Responder 
+class Src extends Resper 
 {
     /**
      * 覆盖 responder 基类中定义的属性
      */
     public $intr = "资源输出";       //responder 说明，子类覆盖
     public $name = "Src";           //responder 名称，子类覆盖
-    public $key = "resource/Src";   //responder 调用路径
+    public $key = "module/resource/Src";   //responder 调用路径
 
     /**
      * 此 响应者 是否不受 WEB_PAUSE 设置影响
@@ -48,8 +47,12 @@ class Src extends Responder
             Response::code(404);
         }
 
+        //var_dump(Resper::$config->ctx());
+        trigger_error("res/miss::foo/bar", E_USER_ERROR);
+
         //检查 预定义的路径别名
         $conf = $this->conf;
+        var_dump($conf);
         $alias = $conf["alias"] ?? [];
         if (isset($alias[strtolower($args[0])])) {
             $args[0] = $alias[strtolower($args[0])];

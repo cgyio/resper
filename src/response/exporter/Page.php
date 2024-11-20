@@ -6,9 +6,10 @@
 
 namespace Cgy\response\exporter;
 
+use Cgy\Resper;
 use Cgy\response\Exporter;
-use Cgy\Response;
-use Cgy\Request;
+//use Cgy\Response;
+//use Cgy\Request;
 use Cgy\util\Is;
 
 class Page extends Exporter
@@ -28,9 +29,9 @@ class Page extends Exporter
             exit;
         }
         
-        $_Request = Request::current();
+        $_Request = Resper::$request;
+        $_Resper = Resper::$resper;
         $_Response = $this->response;
-        //$_Router = Router::current();
         $_Params = [];
 
         $vars = get_object_vars($this->response);

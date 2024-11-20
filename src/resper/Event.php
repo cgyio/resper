@@ -16,7 +16,7 @@
 
 namespace Cgy;
 
-use Cgy\Resper;
+//use Cgy\Resper;
 use Cgy\App;
 use Cgy\Module;
 use Cgy\Request;
@@ -195,7 +195,7 @@ class Event
                     $hdlcall = [];
                     if (Is::nemstr($listener)) {
                         //类方法 静态方法
-                        $hdlcall[] = class_exists($listener) ? $listener : Resper::cls($listener);
+                        $hdlcall[] = class_exists($listener) ? $listener : Cls::find($listener);
                     } else if (is_object($listener)) {
                         //实例方法
                         $hdlcall[] = $listener;
@@ -288,7 +288,7 @@ class Event
         //可以是 类名/全称
         if (Is::nemstr($listener)) {
             if (class_exists($listener)) return true;
-            if (!empty(Resper::cls($listener))) return true;
+            if (!empty(Cls::find($listener))) return true;
             return false;
         }
 
@@ -321,7 +321,7 @@ class Event
             if (is_object($listener)) {
                 return method_exists($listener, $handler);
             }
-            $cls = class_exists($listener) ? $listener : Resper::cls($listener);
+            $cls = class_exists($listener) ? $listener : Cls::find($listener);
             return Cls::hasMethod($cls, $handler, "public", function($mi) {
                 return $mi->isStatic();
             });

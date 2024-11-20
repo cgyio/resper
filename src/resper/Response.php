@@ -37,17 +37,14 @@ class Response
         "errors" => []
     ];*/
 
-    //Resper 框架实例
-    public $resper = null;
-
     //Request 请求实例
     public $request = null;
 
     /**
-     * 响应者实例 resper\Responder
+     * 响应者实例 Resper
      * !! 在创建 Response 实例之前，必须建立 响应者实例
      */
-    public $responder = null;
+    public $resper = null;
 
     //响应头实例
     public $header = null;
@@ -79,16 +76,15 @@ class Response
      */
     public function __construct()
     {
-        //Resper 实例
-        $this->resper = Resper::$current;
         //Request 实例
-        $this->request = $this->resper->request;
-        //响应者实例
-        $this->responder = $this->resper->responder;
+        $this->request = Resper::$request;
+        //Resper 实例
+        $this->resper = Resper::$resper;
+        
         //创建响应头
         $this->header = new Header();
         //是否暂停响应
-        $this->paused = $this->request->pause && !$this->responder->unpause;
+        $this->paused = $this->request->pause && !$this->resper->unpause;
         //是否允许以 PSR-7 标准输出
         $this->psr7 = EXPORT_PSR7;
 

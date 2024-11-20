@@ -5,11 +5,11 @@
 
 namespace Cgy\request;
 
-use Cgy\util\Is;
-use Cgy\util\Arr;
-use Cgy\util\Str;
-use Cgy\util\Conv;
-use Cgy\util\Path;
+//use Cgy\util\Is;
+//use Cgy\util\Arr;
+//use Cgy\util\Str;
+//use Cgy\util\Conv;
+//use Cgy\util\Path;
 
 use Cgy\traits\staticCurrent;
 
@@ -121,7 +121,7 @@ class Url
         $ups = ltrim($ua[0], "/");
         $upath = !empty($ups) ? explode("/", $ups) : [];
         $qs = count($ua) < 2 ? "" : $ua[1];
-        $q = empty($qs) ? [] : Conv::u2a($qs);
+        $q = empty($qs) ? [] : cgy_conv_u2a($qs);
         return [
             "uri"       => $uristr,
             "path"      => $upath,
@@ -160,13 +160,13 @@ class Url
         $cu = empty($cu) || !($cu instanceof Url) ? self::current() : $cu;
         if (empty($url)) return $cu;
         $uri = self::uri($url);
-        $uri["query"] = Arr::extend($cu->query, $uri["query"]);
+        $uri["query"] = cgy_arr_extend($cu->query, $uri["query"]);
         $qs = empty($uri["query"]) ? "" : "?".a2u($uri["query"]);
-        if (Str::begin($url, "/")) {
+        if (cgy_str_begin($url, "/")) {
             $nu = $cu->domain.$uri["pathstr"].$qs;
         } else {
             $uri["path"] = array_merge($cu->path, $uri["path"]);
-            $nu = $cu->domain."/".Path::up(implode("/", $uri["path"]), "/").$qs;
+            $nu = $cu->domain."/".cgy_path_up(implode("/", $uri["path"]), "/").$qs;
         }
         return new Url($nu);
     }

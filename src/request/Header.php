@@ -6,7 +6,7 @@
 
 namespace Cgy\request;
 
-use Cgy\Header as Hdr;
+use Cgy\module\Header as Hdr;
 use Cgy\Request;
 use Cgy\util\Server;
 use Cgy\util\Arr;

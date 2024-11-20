@@ -7,7 +7,6 @@
 namespace Cgy\response\exporter;
 
 use Cgy\Resper;
-use Cgy\resper\Responder;
 use Cgy\Response;
 use Cgy\response\Exporter;
 use Cgy\util\Is;
@@ -32,9 +31,11 @@ class Html extends Exporter
             //调用 系统错误页面，在这些路径中查找 $epn.php 中查找
             $pgps = [];
             $epn = EXPORT_ERRPAGE.EXT;
-            $rdp = Responder::current()->path;
+            $rdp = Resper::$resper->path;
             $pgps[] = $rdp."/".$epn;
+            $pgps[] = $rdp."/error"."/".$epn;
             $pgps[] = "root/".$epn;
+            $pgps[] = "root/error/".$epn;
             $pgps[] = "resper/error/".$epn;
             $errpage = Path::exists($pgps,[
                 "inDir" => "page"
@@ -43,6 +44,7 @@ class Html extends Exporter
             if (empty($errpage) || !file_exists($errpage)) {
                 $this->content = Str::tpl($this->errHtml, $error);
             } else {
+                $_Response = $this->response;
                 require($errpage);
                 //从 输出缓冲区 中获取内容
                 $this->content = ob_get_contents();

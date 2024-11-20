@@ -7,10 +7,10 @@
 namespace Cgy;
 
 use Cgy\Resper;
-use Cgy\resper\Responder;
 use Cgy\util\Str;
+use Cgy\util\Cls;
 
-class Module extends Responder
+class Module extends Resper
 {
 
 
@@ -27,7 +27,7 @@ class Module extends Responder
     {
         $mdcln = Str::beginUp($md) ? $md : ucfirst($md);
         $mdf = MODULE_PATH.DS.$mdcln.EXT;
-        $mdcls = Resper::cls($mdcln);
+        $mdcls = Cls::find("module/".$mdcln);
         if (empty($mdcls)) return false;
         if (!file_exists($mdf)) return false;
         return $mdcls;

@@ -7,14 +7,10 @@
  * 
  */
 
-namespace Cgy\resper;
+namespace Cgy;
 
-use Cgy\Resper;
-use Cgy\Configer;
+use Cgy\module\Configer;
 use Cgy\Event;
-use Cgy\util\Is;
-use Cgy\util\Arr;
-use Cgy\util\Path;
 
 class Config extends Configer 
 {
@@ -79,7 +75,7 @@ class Config extends Configer
          */
         "dir" => [
             //class 文件路径
-            "lib"       => "modules,library, plugin",
+            "lib"       => "module,library, plugin",
             //sqlite 数据库保存路径
             "db"        => "db,library/db",
             //数据表(模型) 类
@@ -186,11 +182,11 @@ class Config extends Configer
         //定义 固定常量
         self::def($this->defines);
         //定义 系统路径常量
-        $pre = Path::fix(__DIR__.DS."..".DS."..".DS."..".DS."..".DS."..");
+        $pre = cgy_path_fix(__DIR__.DS."..".DS."..".DS."..".DS."..".DS."..");
         $vdp = $pre.DS."vendor";
         $cgp = $vdp.DS."cgyio";
         $rep = $cgp.DS."resper".DS."src";
-        $mdp = $rep.DS."modules";
+        $mdp = $rep.DS."module";
         $path = [
             "pre_path" => $pre,
             "vendor_path" => $vdp,
@@ -200,7 +196,7 @@ class Config extends Configer
         ];
         self::def($path);
         //路径常量合并到 $defines
-        $this->defines = Arr::extend($this->defines, $path);
+        $this->defines = cgy_arr_extend($this->defines, $path);
         return $this;
     }
 
@@ -216,8 +212,8 @@ class Config extends Configer
         $defs = [
             "root_path"     => $root,
             "app_path"      => $root . DS . "app",
-            "route_path"    => $root . DS . "route",
-            "asset_path"    => $root . DS . "asset",
+            //"route_path"    => $root . DS . "route",
+            //"asset_path"    => $root . DS . "asset",
             "src_path"      => $root . DS . "assets",
             "assets_path"   => $root . DS . "assets",
             "lib_path"      => $root . DS . "library",
@@ -271,7 +267,7 @@ class Config extends Configer
         if (isset($conf["ini_set"])) {
             //ini_set
             $ist = $conf["ini_set"];
-            if (Is::nemarr($ist)) {
+            if (cgy_is_nemarr($ist)) {
                 foreach ($ist as $k => $v) {
                     ini_set($k, $v);
                 }
@@ -303,17 +299,17 @@ class Config extends Configer
             //模块名 必须小写
             $mdn = strtolower($md);
             //获取 module/Config 设置类
-            $cls = Resper::cls($mdn."/Config");
+            $cls = cgy_cls_find("module/".$mdn."/Config");
             if (empty($cls)) continue;
             //读取用户设置项
             $opt = $this->ctx("module/".$mdn);
-            if (!Is::nemarr($opt)) {
+            if (!cgy_is_nemarr($opt)) {
                 $opt = [];
             }
             //建立 module configer 实例
             $cfg = new $cls($opt);
             //将 module 参数 写入 context
-            $this->context = Arr::extend($this->context, [
+            $this->context = cgy_arr_extend($this->context, [
                 "module" => [
                     $mdn => $cfg->ctx()
                 ]
@@ -354,17 +350,17 @@ class Config extends Configer
             $apn = strtolower($app);
             if (!file_exists($appd.DS.ucfirst($apn).EXT)) continue;
             //获取 App/apn/Config 设置类
-            $cls = Resper::cls("App/".$apn."/Config");
+            $cls = cgy_cls_find("App/".$apn."/Config");
             if (empty($cls)) continue;
             //读取用户设置项
             $opt = $this->ctx("app/".$apn);
-            if (!Is::nemarr($opt)) {
+            if (!cgy_is_nemarr($opt)) {
                 $opt = [];
             }
             //建立 app configer 实例
             $cfg = new $cls($opt);
             //将 app 参数 写入 context
-            $this->context = Arr::extend($this->context, [
+            $this->context = cgy_arr_extend($this->context, [
                 "app" => [
                     $apn => $cfg->ctx()
                 ]

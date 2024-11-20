@@ -6,12 +6,11 @@
 
 namespace Cgy;
 
-use Cgy\Resper;
 use Cgy\Response;
 use Cgy\util\Is;
 use Cgy\util\Arr;
 use Cgy\util\Path;
-
+use Cgy\util\Cls;
 
 class Error
 {
@@ -215,7 +214,7 @@ class Error
 			}
 		}
         if (is_null($cls)) {
-            $cls = [ Resper::cls("error/base"), "unknown" ];
+            $cls = [ Cls::find("error/base"), "unknown" ];
         }
         //var_dump($msg);
 		//create error instance
@@ -241,7 +240,7 @@ class Error
 	{
 		$err_last = error_get_last();
 		var_dump($err_last);
-		$cls = [ Resper::cls("error/base"), "fatal" ];
+		$cls = [ Cls::find("error/base"), "fatal" ];
 		$file = $err_last["file"];
 		$line = $err_last["line"];
 		$msg = $err_last["message"];
@@ -313,20 +312,20 @@ class Error
 			for ($i=count($arr); $i>=1; $i--) {
 				$subarr = array_slice($arr, 0, $i);
 				$subarr[count($subarr)-1] = ucfirst(strtolower(array_slice($subarr, -1)[0]));
-				$cls = Resper::cls("error/".implode("/",$subarr));
+				$cls = Cls::find("error/".implode("/",$subarr));
 				if (!is_null($cls)) {
 					$idx = $i;
 					break;
 				}
 			}
 			if ($idx<=0) {
-				return [ Resper::cls("error/Base"), implode("/", $arr) ];
+				return [ Cls::find("error/Base"), implode("/", $arr) ];
 			} else {
 				$arrs = [
 					array_slice($arr, 0, $idx),
 					array_slice($arr, $idx)
 				];
-				return [ Resper::cls("error/".implode("/", $arrs[0])), implode("/", $arrs[1])];
+				return [ Cls::find("error/".implode("/", $arrs[0])), implode("/", $arrs[1])];
 			}
 		}
 		return null;

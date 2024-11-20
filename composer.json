@@ -29,10 +29,11 @@
 		"psr-4": {
 			"Cgy\\": [
                 "src/", 
-                "src/modules/", 
-                "../../../", 
-                "../../../library/",
-                "../../../modules/"
+                "src/resper/"
+			],
+			"Cgy\\Web\\": [
+                "../../../",
+                "../../../library/"
             ],
             "Cgy\\App\\": [
                 "../../../app/"

@@ -6,10 +6,11 @@
 
 namespace Cgy\response;
 
-use Cgy\Resper;
+//use Cgy\Resper;
 use Cgy\Response;
 use Cgy\Error;
 use Cgy\util\Is;
+use Cgy\util\Cls;
 
 class Exporter
 {
@@ -17,6 +18,8 @@ class Exporter
     public $response = null;
     //默认输出数据的结构
     protected static $default = [
+        //当前会话 Resper 响应者
+        "resper" => [],
         "error" => false,
         "errors" => [],
         "data" => null
@@ -45,6 +48,9 @@ class Exporter
             $this->data = array_merge(self::$default, []);
         }
         $this->data["data"] = $this->response->data;
+        if (!empty($this->response->resper)) {
+            $this->data["resper"] = $this->response->resper::$params;
+        }
         $this->prepareError();
     }
 
@@ -151,7 +157,7 @@ class Exporter
     public static function has($format)
     {
         $cln = "response/exporter/".$format;
-        $cls = Resper::cls($cln);
+        $cls = Cls::find($cln);
         if (empty($cls)) return false;
         return $cls;
     }
