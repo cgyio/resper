@@ -9,6 +9,7 @@
 
 namespace Cgy;
 
+use Cgy\Resper;
 use Cgy\module\Configer;
 use Cgy\Event;
 
@@ -31,6 +32,47 @@ class Config extends Configer
             "ini_set" => [
                 "display_errors" => "1"
             ],
+        ],
+        
+        /**
+         * 特殊路径/文件夹
+         * !! 尽量使用默认设置
+         */
+        "dir" => [
+            //class 文件路径
+            "lib"       => "library,plugin",
+            //sqlite 数据库保存路径
+            "db"        => "db,library/db",
+            //数据表(模型) 类
+            "model"     => "model,library/model,library/db,library/db/model",
+            //assets 路径
+            "asset"     => "assets,assets/library,asset,asset/library,src,src/library,public,page",
+            //文件上传路径
+            "upload"    => "uploads",
+        ],
+
+        /**
+         * response export 参数
+         * !! 尽量使用默认设置
+         */
+        "export" => [
+            "formats"   => "pause,html,page,json,xml,str,dump",
+            "format"    => "html",
+            "ajax"      => "json",
+            "lang"      => "zh-CN",     //输出语言
+            "psr7"      => false,		//是否允许以Psr-7标准返回响应
+            "errpage"   => "errorPage", //错误页面名称
+        ],
+
+        /**
+         * 数据库预设
+         * !! 尽量使用默认设置
+         */
+        "db" => [
+            "base"      => "",              //db path for current website, cover PATH
+            "type"      => "sqlite",        //default DB type, [mysql, sqlite, ...] 
+            "route"     => "dbm",           //默认的 db 管理路由，各站点可根据需求 extend 此路由，并在此指定新路由 name（类名称）
+            "formui"    => "Elementui",     //default frontend From UI-framework
         ],
 
         
@@ -67,47 +109,6 @@ class Config extends Configer
                 "sslcheck" => false
             ],
 
-        ],
-        
-        /**
-         * 特殊路径/文件夹
-         * !! 尽量使用默认设置
-         */
-        "dir" => [
-            //class 文件路径
-            "lib"       => "module,library, plugin",
-            //sqlite 数据库保存路径
-            "db"        => "db,library/db",
-            //数据表(模型) 类
-            "model"     => "model,library/model,library/db,library/db/model",
-            //assets 路径
-            "asset"     => "assets,assets/library,asset,asset/library,src,src/library,public,page",
-            //文件上传路径
-            "upload"    => "uploads",
-        ],
-
-        /**
-         * response export 参数
-         * !! 尽量使用默认设置
-         */
-        "export" => [
-            "formats"   => "pause,html,page,json,xml,str,dump",
-            "format"    => "html",
-            "ajax"      => "json",
-            "lang"      => "zh-CN",     //输出语言
-            "psr7"      => false,		//是否允许以Psr-7标准返回响应
-            "errpage"   => "errorPage", //错误页面名称
-        ],
-
-        /**
-         * 数据库预设
-         * !! 尽量使用默认设置
-         */
-        "db" => [
-            "base"      => "",              //db path for current website, cover PATH
-            "type"      => "sqlite",        //default DB type, [mysql, sqlite, ...] 
-            "route"     => "dbm",           //默认的 db 管理路由，各站点可根据需求 extend 此路由，并在此指定新路由 name（类名称）
-            "formui"    => "Elementui",     //default frontend From UI-framework
         ],
 
 
@@ -168,8 +169,8 @@ class Config extends Configer
         $this->initStatic();
         //初始化 web 路径
         $this->initWebPath();
-        //初始化 各设置项
-        $this->initConf();
+        //定义 特殊路径 DIR_***
+        $this->initSpecialPath();
 
         return $this;
     }
@@ -232,13 +233,27 @@ class Config extends Configer
 
     /**
      * 初始化
+     * 定义 特殊路径 DIR_***
+     * @return $this
+     */
+    protected function initSpecialPath()
+    {
+        $dirs = $this->ctx("dir");
+        self::def($dirs, "dir");
+        return $this;
+    }
+
+    /**
+     * 初始化
      * 处理 context 中的各项 设置内容
      * @return $this
      */
-    protected function initConf()
+    public function initConf()
     {
         $ctx = $this->context;
         foreach ($ctx as $k => $v) {
+            //dir 已定义
+            if ($k=="dir") continue;
             $m = "init".ucfirst(strtolower($k))."Conf";
             if (method_exists($this, $m)) {
                 //定义了设置项处理方法

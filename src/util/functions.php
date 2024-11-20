@@ -16,7 +16,6 @@ function cgy_str_end(...$args) {return \Cgy\util\Str::end(...$args); }
 function cgy_str_tpl(...$args) {return \Cgy\util\Str::tpl(...$args); }
 function cgy_str_tplkey(...$args) {return \Cgy\util\Str::tplkey(...$args); }
 function cgy_str_nonce(...$args) {return \Cgy\util\Str::nonce(...$args); }
-function cgy_is_chk(...$args) {return \Cgy\util\Is::chk(...$args); }
 function cgy_is_any(...$args) {return \Cgy\util\Is::any(...$args); }
 function cgy_is_all(...$args) {return \Cgy\util\Is::all(...$args); }
 function cgy_is_indexed(...$args) {return \Cgy\util\Is::indexed(...$args); }
@@ -53,7 +52,6 @@ function cgy_path_cnst(...$args) {return \Cgy\util\Path::cnst(...$args); }
 function cgy_path_mk(...$args) {return \Cgy\util\Path::mk(...$args); }
 function cgy_path_relative(...$args) {return \Cgy\util\Path::relative(...$args); }
 function cgy_path_find(...$args) {return \Cgy\util\Path::find(...$args); }
-function cgy_path__findarr(...$args) {return \Cgy\util\Path::_findarr(...$args); }
 function cgy_path_exists(...$args) {return \Cgy\util\Path::exists(...$args); }
 function cgy_path_traverse(...$args) {return \Cgy\util\Path::traverse(...$args); }
 function cgy_path_mkdir(...$args) {return \Cgy\util\Path::mkdir(...$args); }
@@ -94,6 +92,5 @@ function cgy_server_get(...$args) {return \Cgy\util\Server::get(...$args); }
 function cgy_server_has(...$args) {return \Cgy\util\Server::has(...$args); }
 function cgy_server_pre(...$args) {return \Cgy\util\Server::pre(...$args); }
 function cgy_server_key(...$args) {return \Cgy\util\Server::key(...$args); }
-function cgy_secure___construct(...$args) {return \Cgy\util\Secure::__construct(...$args); }
 function cgy_secure_fix(...$args) {return \Cgy\util\Secure::fix(...$args); }
 function cgy_secure_str(...$args) {return \Cgy\util\Secure::str(...$args); }

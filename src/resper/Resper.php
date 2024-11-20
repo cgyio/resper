@@ -77,6 +77,9 @@ class Resper extends ResperBase
         //patch composer autoload
         self::patchAutoload();
 
+        //初始化框架参数
+        self::$config->initConf();
+
         //应用 errorHandler 自定义错误处理
         Error::setHandler();
 

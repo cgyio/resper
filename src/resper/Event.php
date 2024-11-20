@@ -57,6 +57,26 @@ class Event
         */
     ];
 
+    /**
+     * 订阅/触发 事件 log
+     */
+    public static $log = [
+        /*
+        [
+            timestamp,
+            "listen",
+            "event-name",
+            "listener object | class | null"
+        ],
+        [
+            timestamp,
+            "trigger",
+            "event-name",
+            "triggerBy object | class | null"
+        ],
+        */
+    ];
+
     
 
     /**
@@ -94,6 +114,10 @@ class Event
                 return false;
             }
         }
+
+        //log
+        self::log("listen", $event, $listener);
+
         return true;
     }
     public static function addHandlerOnce($event, $listener, $handler)
@@ -216,8 +240,32 @@ class Event
         $ek = $event."-once";
         if (isset(self::$event[$ek])) unset(self::$event[$ek]);
 
+        //log
+        self::log("trigger", $event, $triggerBy);
+
         //完成
         return true;
+    }
+
+    /**
+     * log 订阅/触发 事件
+     * @param String $type 订阅/触发 listen/trigger
+     * @param String $event 事件名称
+     * @param Mixed $by listener/triggerBy 订阅者/触发者
+     * @return Array log array
+     */
+    public static function log($type, $event, $by)
+    {
+        $t = time();
+        $ts = date("Y-m-d H:i:s");
+        $log = [
+            $ts,
+            $type,
+            $event,
+            $by
+        ];
+        self::$log[] = $log;
+        return self::$log;
     }
 
 
