@@ -8,6 +8,7 @@ namespace Cgy;
 
 use Cgy\Resper;
 use Cgy\Request;
+use Cgy\Event;
 use Cgy\response\Header;
 use Cgy\response\Exporter;
 use Cgy\Mime;
@@ -103,6 +104,9 @@ class Response
          */
         //从 url 中输入可能存在的 format 参数
         $this->setFormat();
+
+        //触发 response-created 事件
+        Event::trigger("response-created", $this);
 
     }
 
