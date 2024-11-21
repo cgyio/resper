@@ -17,7 +17,11 @@ namespace Cgy\orm\model;
 use Cgy\Orm;
 use Cgy\orm\Db;
 use Cgy\orm\Model;
+use Cgy\util\Is;
+use Cgy\util\Arr;
+use Cgy\util\Str;
 use Cgy\util\Conv;
+use Cgy\util\Cls;
 
 class Config
 {
@@ -88,7 +92,7 @@ class Config
      * model config 参数初始化
      * 如果有 modelname.json 则读取
      * 如果没有 json 文件，则调用 build 方法，根据 model 预设参数，生成 json
-     * @return Configer $this
+     * @return Config $this
      */
     public function initConfig()
     {
@@ -119,12 +123,12 @@ class Config
     public function __get($key)
     {
         /**
-         * $configer->foo  -->  $configer->context["foo"]
+         * $config->foo  -->  $config->context["foo"]
          */
         if (isset($this->context[$key])) return $this->context[$key];
 
         /**
-         * $configer->fieldName  -->  $configer->context["field"]["foo"]
+         * $config->fieldName  -->  $config->context["field"]["foo"]
          */
         $fdc = $this->context["field"];
         if (isset($fdc[$key]) || substr($key, -5)==="Field") {
@@ -134,8 +138,8 @@ class Config
         }
 
         /**
-         * $configer->searchFields          -->  [ context["field"][*]["searchable"]==true, ... ]
-         * $configer->jsonFields            -->  [ context["field"][*]["isJson"]==true ]
+         * $config->searchFields          -->  [ context["field"][*]["searchable"]==true, ... ]
+         * $config->jsonFields            -->  [ context["field"][*]["isJson"]==true ]
          */
         if (strlen($key)>6 && substr($key, -6)=="Fields") {
             $k = strtolower(substr($key, 0,-6));
@@ -143,7 +147,7 @@ class Config
             $k2 = $k."able";
             $idf = $this->model::idf();
             $kk = isset($fdc[$idf][$k1]) ? $k1 : (isset($fdc[$idf][$k2]) ? $k2 : null);
-            if (is_notempty_str($kk)) {
+            if (Is::nemstr($kk)) {
                 $fds = array_filter($this->context["fields"], function($fi) use ($kk, $fdc) {
                     return $fdc[$fi][$kk]===true;
                 });
@@ -204,17 +208,11 @@ class Config
     protected function buildModelMeta()
     {
         $conf = [];
-        $model = $this->model;
-        $db = $model::$db;
-        if (!$db instanceof Dbo) return $this;
-        $conf = [
-            "app" => $db->app->name,
-            "db" => $db->name,
-        ];
-        $ms = explode(",", "name,title,desc,xpath,table,includes");
-        foreach ($ms as $i => $mi) {
-            if (isset($model::$$mi)) {
-                $conf[$mi] = $model::$$mi;
+        $init = $this->init;
+        $ms = explode(",", "name,title,desc,directedit,creation,includes");
+        foreach ($ms as $i => $mi) { 
+            if (isset($init[$mi])) {
+                $conf[$mi] = $init[$mi];
             }
         }
         return $this->buildSetContext($conf);
@@ -228,10 +226,10 @@ class Config
     protected function buildGetFields()
     {
         $conf = [];
-        $model = $this->model;
-        $creation = $model::$creation;
-        $meta = $model::$meta;
-        $fds = array_keys($creation);
+        $init = $this->init;
+        $creation = $init["creation"] ?? [];
+        $meta = $init["meta"];
+        $fds = $init["fields"] ?? array_keys($creation);
         $conf["fields"] = $fds;
         $conf["field"] = [];
         foreach ($fds as $i => $fdi) {
@@ -274,7 +272,7 @@ class Config
             "field" => []
         ];
         $model = $this->model;
-        $methods = cls_get_ms($model, function($mi) {
+        $methods = Cls::methods($model, "protected", function($mi) {
             if (substr($mi->name, -6)==="Getter") {
                 $doc = $mi->getDocComment();
                 if (strpos($doc, "* getter")!==false || strpos($doc, "* Getter")!==false) {
@@ -282,7 +280,7 @@ class Config
                 }
             }
             return false;
-        }, "protected");
+        });
         if (empty($methods)) return $this->buildSetContext($conf);
         //对找到的方法，进行处理
         foreach ($methods as $k => $mi) {
@@ -301,7 +299,7 @@ class Config
                 $confi[$dai[0]] = implode(" ",array_slice($dai, 1));
             }
             $name = $confi["name"] ?? "";
-            if (!is_notempty_str($name)) {
+            if (!Is::nemstr($name)) {
                 $name = str_replace("Getter","", $k);
                 $confi["name"] = $name;
             }
@@ -319,14 +317,17 @@ class Config
      */
     protected function buildJoin()
     {
-        $model = $this->model;
+        /*$model = $this->model;
         if (isset($this->context["join"])) {
             $join = $this->join;
             $use = $this->useJoin;
         } else {
             $join = $model::$join;
             $use = $model::$useJoin;
-        }
+        }*/
+        $init = $this->init;
+        $join = $init["join"] ?? [];
+        $use = $init["usejoin"] ?? false;
         $conf = [
             "param" => $join,
             "availabel" => !empty($join),   //join 参数是否可用
@@ -346,7 +347,7 @@ class Config
         if (empty($join)) return $this->buildSetContext(["join"=>$conf]);
         //获取 关联表 表明列表
         //$db = $model::$db;
-        //if (!$db instanceof Dbo) return $this->buildSetContext(["join"=>$conf]);
+        //if (!$db instanceof Db) return $this->buildSetContext(["join"=>$conf]);
         $tbs = [];
         $jfd = [];
         foreach ($join as $k => $v) {
@@ -460,7 +461,7 @@ class Config
             "modelApis" => []
         ];
         $model = $this->model;
-        $methods = cls_get_ms($model, function($mi) {
+        $methods = Cls::methods($model, "public", function($mi) {
             if (substr($mi->name, -3)==="Api") {
                 $doc = $mi->getDocComment();
                 if (strpos($doc, "* api")!==false || strpos($doc, "* Api")!==false) {
@@ -468,7 +469,7 @@ class Config
                 }
             }
             return false;
-        }, "public");
+        });
         if (empty($methods)) return $this->buildSetContext($conf);
         //对找到的方法，进行处理
         foreach ($methods as $k => $mi) {
@@ -494,12 +495,12 @@ class Config
                 $confi[$dai[0]] = implode(" ",array_slice($dai, 1));
             }
             $name = $confi["name"] ?? "";
-            if (!is_notempty_str($name)) {
+            if (!Is::nemstr($name)) {
                 $name = str_replace("Api","", $k);
                 $confi["name"] = $name;
             }
             if (is_string($confi["role"]) && $confi["role"]!="all") {
-                $confi["role"] = arr($confi["role"]);
+                $confi["role"] = Arr::mk($confi["role"]);
             }
             //$akey = $model::apikey($name);
             $akey = str_replace("\\","-", str_replace("\\model","",substr(strtolower($model),10)));
@@ -579,7 +580,7 @@ class Config
             if (strpos($ci, "DEFAULT ")!==false) {
                 $cia = explode("DEFAULT ", $ci);
                 $dv = $cia[1] ?? null;
-                if (is_notempty_str($dv)) {
+                if (Is::nemstr($dv)) {
                     if (substr($dv, 0,1)=="'" && substr($dv, -1)=="'") {
                         $dv = str_replace("'","",$dv);
                     } else {
@@ -747,7 +748,7 @@ class Config
 
         //如果指定了用于 规格计算的 字段
         $spec = $this->model::$special;
-        if (isset($spec["package"]) && is_notempty_arr($spec["package"])) {
+        if (isset($spec["package"]) && Is::nemarr($spec["package"])) {
             $cf["package"] = $spec["package"];
         }
 
@@ -775,7 +776,7 @@ class Config
      */
     protected function buildSetContext($conf=[])
     {
-        if (!is_notempty_arr($conf)) return $this;
+        if (!Is::nemarr($conf)) return $this;
         $this->context = arr_extend($this->context, $conf);
         return $this;
     }
