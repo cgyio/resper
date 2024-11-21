@@ -449,8 +449,82 @@ class Resper extends ResperBase
      */
     public function __construct()
     {
+        /**
+         * 根据 resper 响应者预设参数 初始化：
+         */
+        //初始化 orm
+        $this->initOrm();
+
         //自定义初始化动作
         return $this->init();
+    }
+
+    /**
+     * resper 初始化，在构造方法中执行
+     * !! 不要覆盖
+     * 初始化 关联的 Orm 数据库操作类 并创建实例
+     * @return Resper $this
+     */
+    private function initOrm()
+    {
+        $conf = $this->conf;
+        $ormc = $conf["orm"] ?? [];
+        if (!Is::nemarr($ormc)) return $this;
+        $enable = $ormc["enable"] ?? false;
+        if (!is_bool($enable) || $enable!==true) return $this;
+        $ddbc = self::$config->ctx("db");
+        $dbtp = $ormc["type"] ?? ($ddbc["type"] ?? "sqlite");
+
+        /**
+         * 创建 orm 参数
+         */
+        $ormc["type"] = $dbtp;
+        if ($dbtp=="sqlite") {
+            //采用 sqlite 数据库时，查找数据库文件路径
+            $dirs = $ormc["dirs"] ?? DIR_DB;
+            if (Is::nemstr($dirs)) $dirs = explode(",", trim($dirs, ","));
+            $dbps = array_map(function($i) {
+                return $this->path($i, false);
+            }, $dirs);
+            $dbp = Path::exists($dbps, ["checkDir"=>true]);
+            if (!empty($dbp)) {
+                $ormc["path"] = $dbp;
+                //查询数据库列表
+                $dbns = [];
+                $dbph = @opendir($dbp);
+                while(false !== ($dbn = readdir($dbph))) {
+                    if (in_array($dbn, [".",".."]) || is_dir($dbp.DS.$dbn) || strpos($dbn, ".db")===false) continue;
+                    $dbn = str_replace(".db","",$dbn);
+                    if (!in_array($dbn, $dbns)) $dbns[] = $dbn;
+                }
+                @closedir($dbph);
+                $ormc["dbns"] = $dbns;
+            } else {
+                //指定的数据库文件路径不存在，报错
+                trigger_error("resper::指定的数据库路径不存在，DIRS = ".implode(", ",$dirs), E_USER_ERROR);
+                return $this;
+            }
+        } else {
+            //TODO: 采用其他类型数据库
+            //...
+        }
+
+        //将 orm 参数写入 Resper::$config->context
+        $opt = [];
+        $rtp = strtolower($this->type);
+        $rpn = strtolower($this->cls);
+        self::$config->runtimeSet([
+            $rtp => [
+                $rpn => [
+                    "orm" => $ormc
+                ]
+            ]
+        ]);
+
+        //实例化 Orm 类
+        $this->orm = Orm::current($this);
+
+        return $this;
     }
 
     /**
@@ -514,6 +588,19 @@ class Resper extends ResperBase
     }
 
     /**
+     * 获取 resper 内部 类全称
+     * !! 不要覆盖
+     * @param String $cls 类名 或 部分类名
+     * @return String 类全称 或 null
+     */
+    public function cls($cls)
+    {
+        $clp = $this->path;
+        $cln = $clp."/".trim($cls, "/");
+        return Cls::find($cln);
+    }
+
+    /**
      * __get
      * @param String $key
      */
@@ -568,18 +655,6 @@ class Resper extends ResperBase
                     //$rtp = $this->type;
                     $xpt = $this->path;
                     $conf = Resper::$config;
-                    /*if ($rtp == "Resper") {
-                        //响应者是 Resper 类
-                        $xpa = explode("/", $xpt);
-                        if (count($xpa)>2 && in_array(strtolower($xpa[0]), ["app", "module"])) {
-                            //定义在 app / module 路径下的 Resper 类
-                            $xpt = implode("/", array_slice($xpa, 0,2));
-                            return $conf->ctx(strtolower($xpt));
-                        } else {
-                            //单独定义的 resper 类 不设置 预设参数 直接返回 null
-                            return null;
-                        }
-                    }*/
                     return $conf->ctx(strtolower($xpt));
                     break;
 
@@ -623,7 +698,6 @@ class Resper extends ResperBase
         if (!empty($resps)) {
             $response->setParams($resps);
         }
-
 
         //执行响应方法
         $result = null;

@@ -69,7 +69,7 @@ class Config extends Configer
          * !! 尽量使用默认设置
          */
         "db" => [
-            "base"      => "",              //db path for current website, cover PATH
+            //"base"      => "library/db",    //db path for current website, cover PATH
             "type"      => "sqlite",        //default DB type, [mysql, sqlite, ...] 
             "route"     => "dbm",           //默认的 db 管理路由，各站点可根据需求 extend 此路由，并在此指定新路由 name（类名称）
             "formui"    => "Elementui",     //default frontend From UI-framework
@@ -138,6 +138,7 @@ class Config extends Configer
             ],
             */
         ],
+
     ];
 
     /**
@@ -219,8 +220,8 @@ class Config extends Configer
             "src_path"      => $root . DS . "assets",
             "assets_path"   => $root . DS . "assets",
             "lib_path"      => $root . DS . "library",
-            "db_path"       => $root . DS . "library" . DS ."db",
-            "MODEL_path"    => $root . DS . "model",
+            //"db_path"       => $root . DS . str_replace("/", DS, trim($this->ctx("db/base"), "/")),   //"library" . DS ."db",
+            //"MODEL_path"    => $root . DS . "model",
             //"record_path"   => $root . DS . "record",
             //"opr_path"      => $root . DS . "operater",
             "page_path"     => $root . DS . "page",
@@ -391,6 +392,18 @@ class Config extends Configer
         //定义常量 前缀：APP_
         //self::def($this->ctx("app"), "app");
 
+        return $this;
+    }
+
+
+    /**
+     * 运行时 修改 Resper::$config->context
+     * @param Array $opt
+     * @return $this
+     */
+    public function runtimeSet($opt = [])
+    {
+        $this->context = cgy_arr_extend($this->context, $opt);
         return $this;
     }
 
