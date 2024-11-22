@@ -3,13 +3,16 @@
  * 数据表(模型) 实例数据输出工具
  */
 
-namespace Atto\Orm\model;
+namespace Cgy\orm\model;
 
-use Atto\Orm\Orm;
-use Atto\Orm\Dbo;
-use Atto\Orm\Model;
-use Atto\Orm\model\Configer;
-use Atto\Orm\model\ModelSet;
+use Cgy\Orm;
+use Cgy\orm\Db;
+use Cgy\orm\Model;
+use Cgy\orm\model\Config;
+use Cgy\orm\model\ModelSet;
+use Cgy\util\Is;
+use Cgy\util\Arr;
+use Cgy\util\Str;
 
 class Exporter 
 {
@@ -20,7 +23,7 @@ class Exporter
     public $db = null;
     //关联的 数据表(模型) 类 全称
     public $model = "";
-    //关联的 数据表(模型) 类 $configer
+    //关联的 数据表(模型) 类 $config
     public $conf = null;
     //要输出的 数据表(模型) 实例
     public $rs = null;
@@ -36,7 +39,7 @@ class Exporter
         $this->rs = $rs;
         $this->model = $rs::$cls;
         $this->db = $this->model::$db;
-        $this->conf = $this->model::$configer;
+        $this->conf = $this->model::$config;
 
         //对 $rs->context 进行初始处理
         $this->initContext();
@@ -50,8 +53,8 @@ class Exporter
     public function initContext()
     {
         //主表
-        $fds = $this->conf->fields;
-        $fdc = $this->conf->field;
+        $fds = $this->conf->columns;
+        $fdc = $this->conf->column;
 
         //对特殊格式字段执行 值处理
         /*$sfds = $this->conf->specialFields;
@@ -74,7 +77,7 @@ class Exporter
         $spec = $this->conf->specialFields;
         $fds = $spec["time"] ?? [];
         foreach ($fds as $i => $fdn) {
-            $fdc = $this->conf->field[$fdn]["time"];
+            $fdc = $this->conf->column[$fdn]["time"];
             $format = $fdc["type"]=="datetime" ? "Y-m-d H:i:s" : "Y-m-d";
             $fv = $this->rs->context[$fdn];
             $str = $fv<=0 ? "" : date($format, $fv*1);
@@ -121,34 +124,42 @@ class Exporter
         /**
          * 按输入格式 构建输出数据
          *  $rs->ctx(
-         *      "field",
-         *      "table_",
+         *      "column",
+         *      "table",
          *      "getterFunc:alias",
          *      [
          *          "alias" => "foo", 
-         *          "k" => "foo_bar", 
-         *          "kk" => "table_", 
+         *          "k"     => "foo_bar", 
+         *          "kk"    => "table", 
          *          ...
          *      ]
          *  )  --> 
          *  [
-         *      "field" => $rs->ctx("field"),
-         *      "table" => $rs->ctx("table_"),
-         *      "alias" => $rs->ctx("getterFunc")
+         *      "column"    => $rs->context["column"],
+         *      "table"     => $rs->joined["table"]->exporter->export(),
+         *      "alias"     => $rs->getterFunc(),
+         *      [
+         *          "alias" => $rs->context["foo"],
+         *          "k"     => $rs->joined["foo"]->context["bar"],
+         *          "kk"    => $rs->joined["table"]->exporter->export(),
+         *      ]
          *  ]
          */
         $args = func_get_args();
         $mapper = [];
-        if (count($args)==1 && is_notempty_arr($args[0])) {
+        if (count($args)==1 && Is::nemarr($args[0])) {
             $mapper = $args[0];
         } else if (count($args)>1) {
             foreach ($args as $i => $arg) {
-                if (is_notempty_str($arg)) {
+                if ($arg == "" || $arg == "_") {
+                    $ak = $this->conf->table;
+                    $mapper[$ak] = $arg;
+                } else if (Is::nemstr($arg)) {
                     $aa = explode(":", $arg);
                     $ak = $aa[1] ?? $aa[0];
-                    $ak = trim($ak, "_");    // table_ --> table
+                    //$ak = trim($ak, "_");    // table_ --> table
                     $mapper[$ak] = $aa[0];
-                } else if (is_notempty_arr($arg) && isset($arg["alias"]) && is_notempty_str($arg["alias"])) {
+                } else if (Is::nemarr($arg) && isset($arg["alias"]) && Is::nemstr($arg["alias"])) {
                     $ak = $arg["alias"];
                     unset($arg["alias"]);
                     $mapper[$ak] = $arg;
@@ -159,35 +170,56 @@ class Exporter
 
         /**
          * $key == "" | "_"
-         * $rs->ctx() == $rs->_ == $rs->exporter->export()
-         * 输出 主表数据 + 所有 join 关联表数据
+         * $rs->ctx() == $rs->_ == $rs->context
+         * 输出 主表数据
          */
-        if (empty($key) || $key=="" || $key=="_") return $this->expAll();
+        if (empty($key) || $key=="" || $key=="_") return $this->rs->context;
 
         /**
-         * $key == field name
-         * $rs->ctx("field") == $rs->fileinode
+         * $key == "all"
+         * $rs->all == $rs->exporter->expAll()
+         * 输出 全部数据
+         */
+        if ($key == "all") return $this->expAll();
+
+        /**
+         * $key == column name
+         * $rs->ctx("column") == $rs->context["column"]
          * $rs->ctx("getterFunc") == $rs->getterFunc == $rs->getterFunc()
          * 返回主表 字段值
          */
         if (isset($this->rs->context[$key])) return $this->rs->context[$key];
-        $gfds = $this->conf->getterFields;
+        $gfds = $this->conf->getters;
         if (in_array($key, $gfds)) {
             return $this->rs->$key();
         }
 
         /**
-         * $key == Psku | Psku_ | psku_foo | psku_foo_bar_...
-         * $rs->ctx("Psku") == $rs->Psku == $rs->joined["Psku"]
-         * $rs->ctx("Psku_") == $rs->Psku_ == $rs->joined["Psku"]->exporter->export()
-         * $rs->ctx("psku_foo") == $rs->psku_foo == $rs->joined["Psku"]->context["foo"]
-         * $rs->ctx("psku_foo_bar") == $rs->psku_foo_bar == $rs->joined["Psku"]->exporter->export("foo_bar")
-         * 
          * 返回关联表 实例 或 关联表数据
          */
         $jtbs = $this->rs->joined;
+
+        /**
+         * $key == PskuRs
+         * $rs->ctx("PskuRs") == $rs->PskuRs == $rs->joined["Psku"]
+         * 返回关联表 实例
+         */
+        if (strlen($key)>2 && substr($key, -2)=="Rs") {
+            $jtbn = ucfirst(substr($key, 0, -2));
+            if (isset($jtbs[$jtbn])) return $jtbs[$jtbn];
+        }
+
+        /**
+         * $key == Psku | psku_foo | psku_foo_bar_...
+         * $rs->ctx("Psku") == $rs->Psku == $rs->joined["Psku"]->exporter->export()
+         * $rs->ctx("psku_foo") == $rs->psku_foo == $rs->joined["Psku"]->context["foo"]
+         * $rs->ctx("psku_foo_bar") == $rs->psku_foo_bar == $rs->joined["Psku"]->exporter->export("foo_bar")
+         * 返回关联表数据
+         */
         if (isset($jtbs[ucfirst($key)])) {
-            return $jtbs[ucfirst($key)];
+            $jtbn = ucfirst($key);
+            $jtb = $jtbs[$jtbn];
+            return $jtb->exporter->export();
         } else if (strpos($key, "_")!==false) {
             $ka = explode("_", $key);
             if (isset($jtbs[ucfirst($ka[0])])) {
@@ -220,9 +252,9 @@ class Exporter
         if (empty($mapper)) return null;
         $rtn = [];
         foreach ($mapper as $k => $v) {
-            if (is_notempty_str($v)) {
+            if (Is::nemstr($v) || $v=="") {
                 $rtn[$k] = $this->export($v);
-            } else if (is_notempty_arr($v) && is_associate($v)) {
+            } else if (Is::nemarr($v) && Is::associate($v)) {
                 $rtn[$k] = $this->mapper($v);
             }
         }
@@ -234,7 +266,7 @@ class Exporter
      * 输出 主表数据 + 所有 join 关联表数据
      * @return Array
      */
-    protected function expAll()
+    public function expAll()
     {
         $rtn = [];
         $rtn = array_merge($rtn, $this->rs->context);

@@ -19,14 +19,21 @@ use Cgy\orm\model\Record;
 use Cgy\orm\model\Config;
 use Cgy\orm\model\Exporter;
 use Cgy\orm\model\ModelSet;
+use Cgy\Resper;
 use Cgy\Request;
 use Cgy\Response;
+use Cgy\util\Is;
+use Cgy\util\Arr;
+use Cgy\util\Str;
 
 class Model extends Record
 {
     /**
-     * 当前数据模型(表) 依赖的 数据库实例
+     * 当前数据模型(表) 依赖项
      */
+    //resper 实例
+    public static $resper = null;
+    //数据库实例
     public static $db = null;
 
     //此 数据表(模型) 类全称
@@ -36,7 +43,7 @@ class Model extends Record
      * 数据表 预设参数
      * 子类覆盖
      */
-    public static $name = "";
+    /*public static $name = "";
     public static $table = "";  //数据表(模型)类 在数据库中的 表名称，通常是 model::$name 的全小写
     public static $title = "";
     public static $desc = "";
@@ -60,7 +67,7 @@ class Model extends Record
     //默认每次查询是否使用 join 表
     public static $useJoin = false;
     //每次查询必须包含的字段
-    public static $includes = ["id","enable"];
+    public static $includes = ["id","enable"];*/
 
     //预设参数解析对象 ModelConfiger 实例
     public static $config = null;
@@ -74,19 +81,25 @@ class Model extends Record
      * 依赖注入
      * @param Array $di 要注入 模型(表) 类的依赖对象，应包含：
      *  [
+     *      "resper"    => 关联的 resper 响应者实例
      *      "db" => 此 模型(表) 所在的数据库实例
      *  ]
      * @return String 类全称
      */
     public static function dependency($di=[])
     {
+        //注入 关联 Resper 实例
+        $resper = $di["resper"] ?? null;
+        if ($resper instanceof Resper) {
+            static::$resper = $resper;
+        }
         //依赖：此表所在数据库实例
         $db = $di["db"] ?? null;
         if (!empty($db) && $db instanceof Db) {
             static::$db = $db;
         }
 
-        return static::cls();
+        return static::$cls;
     }
 
     /**
@@ -96,14 +109,25 @@ class Model extends Record
     public static function parseConfig()
     {
         $cls = static::$cls;
-        $cln = array_pop(explode("\\", $cls));
+        $cla = explode("\\", $cls);
+        $cln = array_pop($cla);
         
         //从 Db 获取 config 内容
         $db = static::$db;
         $conf = $db->config->ctx("model/".lcfirst($cln));
+        if (!empty($conf)) {
+            $mdn = lcfirst($cln);
+        } else {
+            $conf = $db->config->ctx("model/".$cln);
+            if (!empty($conf)) {
+                $mdn = $cln;
+            } else {
+                return $cls;
+            }
+        }
 
         //使用 model\Config 解析表预设
-        static::$config = new Config($cls, $conf);
+        static::$config = new Config($cls, $conf, $mdn);
         return $cls;
     }
 
@@ -144,7 +168,7 @@ class Model extends Record
     {
         $tb = static::$name;
         $db = static::$db;
-        if (!$db instanceof Db) return static::cls();
+        if (!$db instanceof Db) return static::$cls;
         $rs = $db->curdQuery("select");
         var_dump($rs);
         //create record set
@@ -228,11 +252,11 @@ class Model extends Record
                 }*/
                 return $rst;
             }
-            if (is_indexed($rst)) {
+            if (Is::indexed($rst)) {
                 //记录集 通常 select/rand 方法 返回记录集
                 //包裹为 ModelSet 记录集对象
                 return new ModelSet($mcls, $rst);
-            } else if (is_associate($rst)) {
+            } else if (Is::associate($rst)) {
                 //单条记录 通常 get 方法 返回单条记录
                 //包裹为 Model 实例
                 return static::create($rst);
@@ -243,17 +267,17 @@ class Model extends Record
     }
 
     /**
-     * 判断 表 是否包含字段 $field
-     * @param String $field 可以是 field 或 table.field
+     * 判断 表 是否包含字段 $column
+     * @param String $column 可以是 column 或 table.column
      * @return Bool
      */
-    public static function hasField($field)
+    public static function hasColumn($column)
     {
         $conf = static::$config;
-        $fds = $conf->fields;
+        $fds = $conf->columns;
         $tbn = $conf->table;
-        if (strpos($field, ".")===false) return in_array($field, $fds);
-        $fa = explode(".",$field);
+        if (strpos($column, ".")===false) return in_array($column, $fds);
+        $fa = explode(".",$column);
         return $tbn==$fa[0] && in_array($fa[1], $fds);
     }
 
@@ -263,7 +287,7 @@ class Model extends Record
      */
     public static function aif()
     {
-        $fdc = static::$config->field;
+        $fdc = static::$config->column;
         $rtn = "id";
         foreach ($fdc as $fdn => $c) {
             if ($c["isId"]==true) {

@@ -30,6 +30,7 @@ class Base extends Error
             "custom"    => ["发生错误",             "%{1}%"],
             "auth"      => ["权限验证失败",         "%{1}%"],
             "resper"    => ["Resper 框架启动失败",  "%{1}%"],
+            "orm"       => ["ORM 错误",             "%{1}%"],
         ]
         
 	];

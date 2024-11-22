@@ -7,7 +7,7 @@
  * 
  */
 
-namespace Atto\Box\traits;
+namespace Cgy\traits;
 
 trait staticCreate
 {

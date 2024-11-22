@@ -14,6 +14,7 @@
  *          "resper"    => $resper,         依赖 Resper 响应者实例
  *          "orm"       => $resper->orm     依赖关联的 Orm 实例
  *      ])
+ * 
  * 初始化一个 curd 操作，链式调用：
  *      $db->Model->join(false)->field("*")->where([...])->limit([0,20])->order(["foo"=>"DESC"])->select();
  * 获取数据表(模型)类：
@@ -40,6 +41,7 @@ use Cgy\Event;
 use Cgy\util\Is;
 use Cgy\util\Arr;
 use Cgy\util\Str;
+use Cgy\util\Cls;
 use Medoo\Medoo;
 
 class Db
@@ -191,8 +193,10 @@ class Db
             //Orm::eventRegist($mcls);
             //依赖注入
             $mcls::dependency([
+                //注入 当前 resper 实例
+                "resper" => $this->resper,
                 //将当前 数据库实例 注入 数据表(模型) 类
-                "db" => $this
+                "db" => $this,
             ]);
             //解析表预设参数
             $mcls::parseConfig();
@@ -300,7 +304,7 @@ class Db
             //指针指向 model 类全称
             $this->currentModel = $mcls;
             //准备 curd 操作
-            if ($this->curdInited()!=true || $this->curd->model::$name!=$key) {
+            if ($this->curdInited()!=true || $this->curd->model::$config->name!=$key) {
                 //仅当 curd 操作未初始化，或 当前 curd 操作为针对 此 数据表(模型) 类 时，重新初始化 curd
                 $this->curdInit($key);
             }
@@ -318,9 +322,17 @@ class Db
              * $db->Model->property 
              * 访问 数据表(模型) 类属性 静态属性
              */
-            if (cls_hasp($model, $key, 'static,public')) {
+            if (Cls::hasProperty($model, $key, 'static,public')) {
                 return $model::$$key;
             }
+
+            /**
+             * $db->Model->conf     -->  Model::$config
+             * $db->Model->foo      --> Model::$config->foo
+             */
+            if ($key=="conf") return $model::$config;
+            $cnt = $model::$config->$key;
+            if (!empty($cnt)) return $cnt;
 
             /**
              * 如果 curd 操作已被初始化为 针对 此 model
@@ -393,7 +405,7 @@ class Db
              * $db->Model->func()
              * 调用 数据表(模型) 类方法 静态方法
              */
-            if (cls_hasm($model, $key, "static,public")) {
+            if (Cls::hasMethod($model, $key, "static,public")) {
                 $rst = $model::$key(...$args);
                 if ($rst == $model) {
                     //如果方法返回 数据表(模型) 类，则返回 $db 自身，等待下一步操作
@@ -477,7 +489,7 @@ class Db
     public function medoo($method = null, ...$params)
     {
         if (is_null($this->_medoo)) $this->medooConnect();
-        if (!is_notempty_str($method)) return $this->_medoo;
+        if (!Is::nemstr($method)) return $this->_medoo;
         if (method_exists($this->_medoo, $method)) return $this->_medoo->$method(...$params);
         return null;
     }

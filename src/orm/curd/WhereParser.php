@@ -1,16 +1,19 @@
 <?php
 /**
+ * cgyio/resper 数据库操作
  * Curd 操作类 where 参数处理
  */
 
-namespace Atto\Orm\curd;
+namespace Cgy\orm\curd;
 
-use Atto\Orm\Orm;
-use Atto\Orm\Dbo;
-use Atto\Orm\Model;
-use Atto\Orm\Curd;
-use Atto\Orm\curd\Parser;
-use Atto\Orm\curd\JoinParser;
+use Cgy\Orm;
+use Cgy\orm\Db;
+use Cgy\orm\Model;
+use Cgy\orm\Curd;
+use Cgy\orm\curd\Parser;
+use Cgy\orm\curd\JoinParser;
+use Cgy\util\Is;
+use Cgy\util\Arr;
 
 class WhereParser extends Parser 
 {
@@ -37,9 +40,9 @@ class WhereParser extends Parser
      */
     public function setParam($param=null)
     {
-        if (!is_notempty_arr($param)) return $this;
+        if (!Is::nemarr($param)) return $this;
         $ow = $this->where;
-        $this->where = arr_extend($ow, $param);
+        $this->where = Arr::extend($ow, $param);
         return $this;
     }
 
@@ -82,7 +85,7 @@ class WhereParser extends Parser
      */
     public function whereCol($key, ...$args)
     {
-        if (!$this->model::hasField($key) || empty($args)) return $this;
+        if (!$this->model::hasColumn($key) || empty($args)) return $this;
         $where = [];
         if (count($args) == 1) {
             $where[$key] = $args[0];
@@ -101,9 +104,9 @@ class WhereParser extends Parser
      */
     public function keyword($sk)
     {
-        if (!is_notempty_str($sk)) return false;
+        if (!Is::nemstr($sk)) return false;
         $ska = explode(",", trim(str_replace("，",",",$sk), ","));
-        $sfds = $this->conf->searchFields;
+        $sfds = $this->conf->searchColumns;
         if (empty($sfds)) return false;
         $or = [];
         for ($i=0;$i<count($sfds);$i++) {
@@ -125,7 +128,7 @@ class WhereParser extends Parser
     {
         if (
             (is_numeric($limit) && $limit>0) ||
-            (is_notempty_arr($limit) && is_indexed($limit))
+            (Is::nemarr($limit) && Is::indexed($limit))
         ) {
             $this->where["LIMIT"] = $limit;
         }
@@ -157,8 +160,8 @@ class WhereParser extends Parser
     public function order($order=[])
     {
         if (
-            is_notempty_str($order) ||
-            (is_notempty_arr($order) && is_associate($order))
+            Is::nemstr($order) ||
+            (Is::nemarr($order) && Is::associate($order))
         ) {
             $this->where["ORDER"] = $order;
         }
@@ -174,7 +177,7 @@ class WhereParser extends Parser
      */
     public function orderCol($key, ...$args)
     {
-        if (!$this->model::hasField($key)) return $this;
+        if (!$this->model::hasColumn($key)) return $this;
         $order = [];
         if (empty($args)) {
             $order = $key;
@@ -268,7 +271,7 @@ class WhereParser extends Parser
 
             //MATCH
             if (strtoupper($col)=="MATCH") {
-                if (isset($colv["columns"]) && is_indexed($colv["columns"])) {
+                if (isset($colv["columns"]) && Is::indexed($colv["columns"])) {
                     $where["MATCH"]["columns"] = array_map([$this, 'preTbn'], $colv["columns"]);
                 }
                 continue;
@@ -278,7 +281,7 @@ class WhereParser extends Parser
             if (strtoupper($col)=="ORDER") {
                 if (is_string($colv) && $colv!="") {
                     $where["ORDER"] = $this->preTbn($colv);
-                } else if (is_notempty_arr($colv)) {
+                } else if (Is::nemarr($colv)) {
                     $where["ORDER"] = $this->withTbnPre($colv);
                 }
                 continue;
@@ -290,7 +293,7 @@ class WhereParser extends Parser
                 continue;
             }
 
-            if (is_int($col) && is_notempty_str($colv)) {
+            if (is_int($col) && Is::nemstr($colv)) {
                 $where[$col] = $this->preTbn($colv);
             } else if (is_string($col)) {
                 $cola = $this->preTbn($col);
@@ -310,11 +313,11 @@ class WhereParser extends Parser
      */
     protected function preTbn($col)
     {
-        if (!is_notempty_str($col)) return $col;
+        if (!Is::nemstr($col)) return $col;
         //已经是 table.col 直接返回
         if (strpos($col,".")!==false) return $col;
         $tbn = $this->conf->table;
-        $fds = $this->conf->fields;
+        $fds = $this->conf->columns;
         if (strpos($col, "[")===false) {
             if (in_array($col, $fds)) {
                 return "$tbn.$col";

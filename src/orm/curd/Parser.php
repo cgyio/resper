@@ -1,18 +1,19 @@
 <?php
 /**
+ * cgyio/resper 数据库操作
  * Curd 操作类 参数处理工具类 基类
- * 处理用于 medoo 查询方法的 参数处理：
+ * 处理用于 medoo 查询方法的 参数：
  *      table, join, columns, where
  * 
  * 参数形式满足 medoo 方法参数要求
  */
 
-namespace Atto\Orm\curd;
+namespace Cgy\orm\curd;
 
-use Atto\Orm\Orm;
-use Atto\Orm\Dbo;
-use Atto\Orm\Model;
-use Atto\Orm\Curd;
+use Cgy\Orm;
+use Cgy\orm\Db;
+use Cgy\orm\Model;
+use Cgy\orm\Curd;
 
 abstract class Parser 
 {
@@ -20,7 +21,7 @@ abstract class Parser
      * 依赖：
      * Curd 操作实例
      * Model 关联的 数据表(模型) 类
-     * Configer Model::$configer
+     * Config Model::$config
      */
     public $curd = null;
     public $model = "";
@@ -36,7 +37,7 @@ abstract class Parser
         if (!$curd instanceof Curd) return null;
         $this->curd = $curd;
         $this->model = $curd->model;
-        $this->conf = $curd->model::$configer;
+        $this->conf = $curd->model::$config;
 
         //使用初始化方法
         $this->initParam();

@@ -1,15 +1,19 @@
 <?php
 /**
+ * cgyio/resper 数据库操作
  * 数据模型(表) 记录集 类
  * curd 操作得到的 recordset 被包裹为 此类型
  */
 
-namespace Atto\Orm\model;
+namespace Cgy\orm\model;
 
-use Atto\Orm\Dbo;
-use Atto\Orm\Model;
+use Cgy\orm\Db;
+use Cgy\orm\Model;
+use Cgy\util\Is;
+use Cgy\util\Arr;
+use Cgy\util\Str;
 
-use Atto\Box\traits\arrayIterator;
+use Cgy\traits\arrayIterator;
 
 class ModelSet implements \ArrayAccess, \IteratorAggregate, \Countable
 {
@@ -18,7 +22,7 @@ class ModelSet implements \ArrayAccess, \IteratorAggregate, \Countable
     use arrayIterator;
 
 
-    //关联的数据库实例 Dbo
+    //关联的数据库实例 Db
     public $db = null;
 
     //关联的 模型(数据表) 类全称
@@ -45,7 +49,7 @@ class ModelSet implements \ArrayAccess, \IteratorAggregate, \Countable
 
         if (!is_array($rs) || empty($rs)) {
             $this->context = [];
-        } else if (!is_indexed($rs)) {
+        } else if (!Is::indexed($rs)) {
             $this->context = [];
             $this->context[] = $model::create($rs);
         } else {
@@ -114,7 +118,7 @@ class ModelSet implements \ArrayAccess, \IteratorAggregate, \Countable
                         $ags = [];
                         for ($i=0;$i<count($args);$i++) {
                             if ($args[$i] instanceof Model) {
-                                //增加到 ￥modelset->context 数组的 必须是 model 实例
+                                //增加到 $modelset->context 数组的 必须是 model 实例
                                 $ags[] = $args[$i];
                             }
                         }
@@ -150,13 +154,13 @@ class ModelSet implements \ArrayAccess, \IteratorAggregate, \Countable
             $msi = $this->context[0];
 
             /**
-             * $modelset->fieldname
-             * 返回 字段值 数组 [ "field value", ... ]
-             * 返回 计算字段值 数组 [ "getterfield value", ... ]
+             * $modelset->columnname
+             * 返回 字段值 数组 [ "column value", ... ]
+             * 返回 计算字段值 数组 [ "getter value", ... ]
              */
             if (
                 isset($msi->context[$key]) || 
-                in_array($key, $msi->conf->getterFields) ||
+                in_array($key, $msi->conf->getters) ||
                 (strpos($key, "_")!==false && count(explode("_",$key))>1)
             ) {
                 return $this->map(function($i) use ($key) {

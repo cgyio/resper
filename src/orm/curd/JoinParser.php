@@ -1,15 +1,17 @@
 <?php
 /**
+ * cgyio/resper 数据库操作
  * Curd 操作类 join 参数处理
  */
 
-namespace Atto\Orm\curd;
+namespace Cgy\orm\curd;
 
-use Atto\Orm\Orm;
-use Atto\Orm\Dbo;
-use Atto\Orm\Model;
-use Atto\Orm\Curd;
-use Atto\Orm\curd\Parser;
+use Cgy\Orm;
+use Cgy\orm\Db;
+use Cgy\orm\Model;
+use Cgy\orm\Curd;
+use Cgy\orm\curd\Parser;
+use Cgy\util\Is;
 
 class JoinParser extends Parser 
 {
@@ -20,9 +22,9 @@ class JoinParser extends Parser
     public $available = true;   //join 参数是否可用
     public $use = false;        //是否每次查询都默认启用 join 关联表查询
     public $tables = [];        //关联表数组 [ "table name", ... ]
-    public $field = [           //有关联表的 字段参数
+    public $column = [           //有关联表的 字段参数
         /*
-        "field name" => [
+        "column name" => [
             "table name" => [
                 "linkto" => "关联表中字段名"
                 "relate" => ">|<|<>|>< == left|right|full|inner join"
@@ -74,7 +76,7 @@ class JoinParser extends Parser
         } else {
             $this->use = true;
             if (is_string($join)) {
-                $jtbs = array_unshift($jtbs, $join);
+                array_unshift($jtbs, $join);
                 $this->temp = $jtbs;
             } else if (is_array($join)) {
                 $this->temp = $join;
@@ -114,7 +116,7 @@ class JoinParser extends Parser
         $join = $this->param;
         $temp = $this->temp;
         if (empty($temp)) return $join;
-        if (is_indexed($temp)) {
+        if (Is::indexed($temp)) {
             //通过表名，选择要 join 的 关联表
             $nj = [];
             for ($i=0;$i<count($temp);$i++) {
@@ -138,7 +140,7 @@ class JoinParser extends Parser
     {
         if ($this->use==true && empty($this->temp)) return $this->tables;
         $jps = $this->getParam();
-        if (empty($jp)) return [];
+        if (empty($jps)) return [];
         $tbs = [];
         foreach ($jps as $k => $v) {
             $tbn = preg_replace("/\[.+\]/","",$k);

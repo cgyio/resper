@@ -231,6 +231,7 @@ class Cls extends Util
     public static function hasProperty($cls, $property, $filter=null, $condition=null)
     {
         $ps = self::propertyNames($cls, $filter, $condition);
+        //var_dump($ps);
         return in_array($property, $ps);
     }
     

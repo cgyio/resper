@@ -1,29 +1,33 @@
 <?php
 /**
+ * cgyio/resper 数据库操作类
  * CURD 操作类
  * 每次 curd 操作，将生成一个 Curd 实例
  * 操作结束后，此实例将释放
  */
 
-namespace Atto\Orm;
+namespace Cgy\orm;
 
-use Atto\Orm\Orm;
-use Atto\Orm\Dbo;
-use Atto\Orm\Model;
-use Atto\Orm\model\ModelSet;
-use Atto\Orm\curd\JoinParser;
-use Atto\Orm\curd\ColumnParser;
-use Atto\Orm\curd\WhereParser;
+use Cgy\Orm;
+use Cgy\orm\Db;
+use Cgy\orm\Model;
+use Cgy\orm\model\ModelSet;
+use Cgy\orm\curd\JoinParser;
+use Cgy\orm\curd\ColumnParser;
+use Cgy\orm\curd\WhereParser;
+use Cgy\util\Is;
+use Cgy\util\Str;
+use Cgy\util\Arr;
 use Medoo\Medoo;
 
 class Curd 
 {
-    //关联的数据库实例 Dbo
+    //关联的数据库实例 Db
     public $db = null;
 
     //关联的 模型(数据表) 类全称
     public $model = "";
-    //$model::$configer
+    //$model::$config
     public $conf = null;
 
     /**
@@ -64,16 +68,18 @@ class Curd
 
     /**
      * 构造 curd 操作实例
-     * @param Dbo $db 数据库实例
+     * @param Db $db 数据库实例
      * @param String $model 要执行 curd 的 数据表(模型) 类全称
      */
     public function __construct($db, $model)
     {
-        if (!$db instanceof Dbo || !class_exists($model) || !$db->hasModel($model::$name)) return null;
+        if (!$db instanceof Db || !class_exists($model)) return null;
+        $mdn = $model::$config->name;
+        if ($db->hasModel($mdn)===false) return null;
         $this->db = $db;
         $this->model = $model;
-        $this->table = $model::$table;
-        $this->conf = $model::$configer;
+        $this->table = $mdn;
+        $this->conf = $model::$config;
         
         //使用 curd 参数处理工具，初始化/编辑 curd 参数
         $this->joinParser = new JoinParser($this);
@@ -94,13 +100,12 @@ class Curd
     {
         $db = $this->db;
         $model = $this->model;
-        $cfg = $model::$configer;
         $table = $this->table;
         return 
-            $db instanceof Dbo &&
+            $db instanceof Db &&
             class_exists($model) &&
             $table!="" && 
-            $table==$cfg->table;
+            $model == $db->hasModel($table);
     }
 
     /**
@@ -131,7 +136,6 @@ class Curd
         if ($jp instanceof JoinParser) {
             $jp->setParam(...$args);
         }
-
         return $this;
     }
     public function nojoin() {return $this->join(false);}
@@ -226,8 +230,8 @@ class Curd
              */
             if (strlen($method)>5 && in_array(substr($method, 0,5), ["where","order"])) {
                 //whereFooBar --> 字段名：foo_bar
-                $fdn = strtosnake(substr($method, 5), "_");
-                if ($model::hasField($fdn)) {
+                $fdn = Str::snake(substr($method, 5), "_");
+                if ($model::hasColumn($fdn)) {
                     if (substr($method, 0,5)=="where" && count($args)>0) {
                         $this->whereCol($fdn, ...$args);
                         return $this;
@@ -278,7 +282,7 @@ class Curd
                     break;
                 case "insert":
                 case "update":
-                    if (is_notempty_arr($args) && is_notempty_arr($args[0])) {
+                    if (Is::nemarr($args) && Is::nemarr($args[0])) {
                         $ps[] = array_shift($args);
                     } else {
                         return null;
@@ -325,7 +329,7 @@ class Curd
 
             //销毁当前 curd 操作
             $unset = true;
-            if (is_notempty_arr($args) && is_bool($args[0])) {
+            if (Is::nemarr($args) && is_bool($args[0])) {
                 $unset = array_unshift($args);
             }
             if ($unset) $this->unset();
@@ -356,7 +360,7 @@ class Curd
     }
 
     /**
-     * 通过 Dbo->Model->method 调用 curd 操作时
+     * 通过 Db->Model->method 调用 curd 操作时
      * 判断 给定的 method 是否是支持的 medooMethod
      * @param String $key method
      * @return Bool
@@ -367,7 +371,7 @@ class Curd
     }
 
     /**
-     * 通过 Dbo->Model->method 调用 whereParser 方法时
+     * 通过 Db->Model->method 调用 whereParser 方法时
      * 判断 给定的 method 是否支持
      * @param String $key method
      * @return Bool

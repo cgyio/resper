@@ -8,6 +8,13 @@
 
 namespace Cgy\orm\model;
 
+use Cgy\Orm;
+use Cgy\orm\Db;
+use Cgy\orm\model\Exporter;
+use Cgy\util\Is;
+use Cgy\util\Str;
+use Cgy\util\Arr;
+
 class Record 
 {
     /**
@@ -55,7 +62,7 @@ class Record
         $this->exporter = new Exporter($this);
         
         //创建事件订阅，订阅者为此 数据表记录实例
-        Orm::eventRegist($this);
+        /*Orm::eventRegist($this);
 
         //执行 可能存在的 initInsFooBar() 通常由 实现各种数据操作功能的 traits 引入
         $this->initInsQueue();
@@ -63,7 +70,7 @@ class Record
         $this->initInsFinal();
 
         //触发 数据记录实例化 事件
-        Orm::eventTrigger("model-insed", $this);
+        Orm::eventTrigger("model-insed", $this);*/
     }
 
     /**
@@ -76,25 +83,27 @@ class Record
     {
         //如果未传入 初始 data 则视为新建记录，初始 data = 默认值 default
         if (empty($data)) {
-            $data = static::$configer->default;
+            $data = static::$config->default;
             //标记为 新建(未保存)记录
             $this->isNew = true;
         }
+
+        //var_dump(array_keys($data));
         
         //从 data 中分离出 join 关联表返回的数据
-        $jtbs = static::$configer->join["tables"] ?? [];
+        $jtbs = static::$config->join["tables"] ?? [];
+        //var_dump($jtbs);
         $mdata = [];
         $jdata = [];
         if (empty($jtbs)) $mdata = $data;
+        $cdata = Arr::copy($data);
         foreach ($jtbs as $i => $tbn) {
             $tbn = strtolower($tbn);
             $jdi = [];
-            foreach ($data as $f => $v) {
+            foreach ($cdata as $f => $v) {
                 if (substr($f, 0, strlen($tbn)+1)==$tbn."_") {
                     $jdi[substr($f, strlen($tbn)+1)] = $v;
-                    //unset($data[$f]);
-                } else {
-                    $mdata[$f] = $v;
+                    unset($cdata[$f]);
                 }
             }
             if (!empty($jdi)) {
@@ -102,16 +111,18 @@ class Record
             }
         }
 
+        //var_dump(array_keys($cdata));
+
         //当前主表数据写入 context
-        $this->context = $mdata;
+        $this->context = $cdata;
         //写入主表初始数据 origin
-        $this->origin = $mdata;
+        $this->origin = $cdata;
 
         //创建 join 关联表 实例
         if (!empty($jdata)) {
             foreach ($jdata as $tbi => $tdi) {
                 $tbk = ucfirst($tbi);
-                $tcls = static::$db->$tbk->cls;
+                $tcls = static::$db->model($tbi);
                 $this->joined[$tbk] = $tcls::create($tdi);
             }
         }
@@ -166,6 +177,10 @@ class Record
      */
     public function __get($key)
     {
+
+        //要求此 数据表(模型) 类必须经过初始化
+        if (!static::$db instanceof Db) return null;
+
         /**
          * 通过 $rs->exporter->export($key) 方法，返回数据记录 字段值/关联表字段值
          * 
@@ -182,24 +197,26 @@ class Record
             if (!is_null($rst)) return $rst;
         }
 
-
-        //要求此 数据表(模型) 类必须经过初始化
-        if (!static::$db instanceof Dbo) return null;
+        /**
+         * $rs->Resper / $rs->resper
+         * 返回 $model::$resper
+         */
+        if (strtolower($key) == "resper") return static::$resper;
 
         /**
-         * $rs->Db / $rs->Main
+         * $rs->Db / $rs->db / $rs->Main
          * 返回 $model::$db
          */
-        if ($key=="Db" || $key==ucfirst(static::$db->name)) {
+        if (strtolower($key) == "db" || strtolower($key) == strtolower(static::$db->name)) {
             return static::$db;
         }
 
         /**
-         * $rs->Model / $rs->Tablename
+         * $rs->Model / $rs->model / $rs->Tablename
          * 相当于 $db->Model
          */
-        if ($key=="Model" || $key==static::$name) {
-            $tbn = ucfirst(static::$name);
+        if (strtolower($key) == "model" || strtolower($key) == strtolower(static::$config->name)) {
+            $tbn = ucfirst(static::$config->name);
             return static::$db->$tbn;
         }
 
@@ -213,11 +230,11 @@ class Record
         }
 
         /**
-         * $rs->conf
+         * $rs->conf / $rs->Conf
          * 访问 $model::$configer
          */
-        if ($key=="conf") {
-            return static::$configer;
+        if (strtolower($key) == "conf") {
+            return static::$config;
         }
 
         return null;
@@ -235,7 +252,7 @@ class Record
          * $rs->getterFunc()
          * 调用 数据表(模型) 实例 getter 方法
          */
-        $gfds = static::$configer->getterFields;
+        $gfds = static::$config->getters;
         if (in_array($method, $gfds)) {
             $getter = $method."Getter";
             if (method_exists($this, $getter)) {
@@ -255,5 +272,15 @@ class Record
     public function ctx(...$args)
     {
         return $this->exporter->export(...$args);
+    }
+
+    /**
+     * 输出全部字段
+     * 调用 $exporter->expAll() 
+     * @return Array 全部字段，包含 join 表
+     */
+    public function all()
+    {
+        return $this->exporter->expAll();
     }
 }

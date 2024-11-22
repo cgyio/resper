@@ -1,15 +1,18 @@
 <?php
 /**
+ * cgyio/resper 数据库操作
  * Curd 操作类 column 参数处理
  */
 
-namespace Atto\Orm\curd;
+namespace Cgy\orm\curd;
 
-use Atto\Orm\Orm;
-use Atto\Orm\Dbo;
-use Atto\Orm\Model;
-use Atto\Orm\Curd;
-use Atto\Orm\curd\Parser;
+use Cgy\Orm;
+use Cgy\orm\Db;
+use Cgy\orm\Model;
+use Cgy\orm\Curd;
+use Cgy\orm\curd\Parser;
+use Cgy\util\Is;
+use Cgy\util\Arr;
 
 class ColumnParser extends Parser 
 {
@@ -67,7 +70,7 @@ class ColumnParser extends Parser
                 }
             }
         }
-        if (is_notempty_arr($column)) {
+        if (Is::nemarr($column)) {
             $column = $this->setColumnTypeArr($column);
         } else {
             return $this;
@@ -90,8 +93,8 @@ class ColumnParser extends Parser
     /**
      * 执行 curd 操作前 返回处理后的 curd column 参数
      * 每次查询都必须包含以下字段：
-     *      $conf->idFields id 字段
-     *      $conf->generatorFields 系统创建的自增 id
+     *      $conf->idColumns id 字段
+     *      $conf->generatorColumns 系统创建的自增 id
      *      $conf->includes 数组中指定的 字段
      * 
      * !! 子类必须实现 !!
@@ -103,11 +106,11 @@ class ColumnParser extends Parser
         if (!is_array($column)) $column = [$column];
         
         $includes = $this->conf->includes;
-        $idfs = $this->conf->idFields;
-        $gfs = $this->conf->generatorFields;
+        $idfs = $this->conf->idColumns;
+        $gfs = $this->conf->generatorColumns;
         if (!is_array($includes)) $includes = [];
-        if (is_notempty_arr($idfs)) $includes = array_merge($includes, $idfs);
-        if (is_notempty_arr($gfs)) $includes = array_merge($includes, $gfs);
+        if (Is::nemarr($idfs)) $includes = array_merge($includes, $idfs);
+        if (Is::nemarr($gfs)) $includes = array_merge($includes, $gfs);
 
         $incs = $this->setColumnTypeArr($includes);
         foreach ($incs as $i => $fi) {
@@ -155,9 +158,9 @@ class ColumnParser extends Parser
         }
         $db = $this->curd->db;
         $model = $this->curd->model;
-        $cfg = $model::$configer;
-        $fds = $cfg->fields;
-        $fdc = $cfg->field;
+        $cfg = $model::$config;
+        $fds = $cfg->columns;
+        $fdc = $cfg->column;
         $useJoin = $this->curd->joinParser->use;
         if (strpos($fdn, ".")===false) {
             //字段名  -->  表名.字段名 [类型]
@@ -165,7 +168,7 @@ class ColumnParser extends Parser
                 //读取预设的 字段类型
                 $type = $fdc[$fdn]["type"]["php"] ?? "String";
                 //if ($useJoin) $fdn = $model::$table.".".$fdn." (".$model::$table."_".$fdn.")";
-                if ($useJoin) $fdn = $model::$table.".".$fdn;
+                if ($useJoin) $fdn = $cfg->table.".".$fdn;
                 if ($type!="String") {
                     return $fdn." [".$type."]";
                 }
@@ -175,11 +178,11 @@ class ColumnParser extends Parser
             $fda = explode(".", $fdn);
             $tbn = $fda[0];
             $nfdn = $fda[1];
-            $nmodel = $db->getModel(ucfirst($tbn));
-            $ncfg = $nmodel::$configer;
+            $nmodel = $db->model(ucfirst($tbn));
+            $ncfg = $nmodel::$config;
             if (!empty($nmodel)) {
-                $nfds = $ncfg->fields;
-                $nfdc = $ncfg->field;
+                $nfds = $ncfg->columns;
+                $nfdc = $ncfg->column;
                 if (in_array($nfdn, $nfds)) {
                     //读取预设的 字段类型
                     $ntype = $nfdc[$nfdn]["type"]["php"] ?? "String";
@@ -200,12 +203,12 @@ class ColumnParser extends Parser
      */
     protected function setColumnTypeArr($column=[])
     {
-        if (!is_notempty_arr($column)) return $column;
+        if (!Is::nemarr($column)) return $column;
         $fixed = [];
         foreach ($column as $k => $v) {
-            if (is_notempty_arr($v)) {
+            if (Is::nemarr($v)) {
                 $fixed[$k] = $this->setColumnTypeArr($v);
-            } else if (is_notempty_str($v)) {
+            } else if (Is::nemstr($v)) {
                 $v = $this->setColumnType($v);
                 if (!is_array($v)) $v = [ $v ];
                 $fixed = array_merge($fixed, $v);
@@ -224,11 +227,11 @@ class ColumnParser extends Parser
     protected function setColumnTypeAll($model=null)
     {
         $cmodel = empty($model);
-        $model = empty($model) ? $this->curd->model : $this->curd->db->getModel($model);
+        $model = empty($model) ? $this->curd->model : $this->curd->db->model($model);
         if (empty($model)) return [];
-        $cfg = $model::$configer;
+        $cfg = $model::$config;
         //$useJoin = $this->curd->joinParser->use;
-        $fds = $cfg->fields;
+        $fds = $cfg->columns;
         //if ($useJoin) {
         if (!$cmodel) {
             $fds = array_map(function ($i) use ($cfg) {

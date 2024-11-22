@@ -1,6 +1,7 @@
 <?php
 /**
- * cgyio/resper 数据库 config.json 解析器
+ * cgyio/resper 数据库 参数 解析器
+ * 解析 [dbpath]/config/[dbname].json
  * 解析得到 Configer 实例对象
  */
 
@@ -19,7 +20,13 @@ class Config extends Configer
 
     /**
      * 构造
-     * @param Array $opt 数据库设置文件参数 [type=>"sqlite", dbkey=>"", conf=>"设置文件.json 路径"]
+     * @param Array $opt 数据库设置文件参数，格式：
+     *      [
+     *          type        => "sqlite", 
+     *          database    => "数据库路径" 
+     *          dbkey       => "", 
+     *          conf        => "设置文件.json 路径"
+     *      ]
      * @return void
      */
     public function __construct($opt = [])
@@ -39,7 +46,7 @@ class Config extends Configer
     }
 
     /**
-     * 解析设置文件 db_path/config/db_name.json
+     * 解析设置文件 [dbpath]/config/[dbname].json
      * !! 子类可覆盖
      * @param Array $opt 用户设置
      * @return $this
@@ -47,20 +54,17 @@ class Config extends Configer
     public function setConf($opt = [])
     {
         $init = $this->init;
-        $tbs = $init["model"] ?? [];
-        //一般设置
+        $mds = $init["model"] ?? [];
+
+        //解析 除 model参数 外的 一般设置
         foreach ($init as $k => $v) {
-            if ($k=="model") continue;
+            if ($k == "model") continue;
             $this->context[$k] = $v;
         }
         $this->context = Arr::extend($this->context, [
-            "models" => array_keys($tbs),
-            "model" => $tbs
+            "models" => array_keys($mds),
+            "model" => $mds
         ]);
-        //解析数据表(模型)参数
-        foreach ($tbs as $tbn => $tbc) {
-
-        }
 
         return $this;
     }
@@ -78,37 +82,57 @@ class Config extends Configer
         return $this;
     }
 
-
     /**
-     * 读取 json file
+     * 解析 model 参数
+     * 解析 context["model"][$model] 中保存的参数
+     * 在 $db->model($model) 时，执行此方法，对 数据模型(表) 类进行参数初始化，并保存到类
+     * @param String $model 数据模型(表) name
+     * @return Array 解析得到的 model 参数
      */
-    public static function parse($db=null)
+    public function parseModelConf($model)
     {
-        $dbname = $db->name;
-        $pathinfo = $db->pathinfo;
-        $confp = self::getConfPath($pathinfo["dirname"]);
-        $conf = $confp.DS.$dbname.".json";
-        if (file_exists($conf)) {
-            $conf = j2a(file_get_contents($conf));
+        if (!Is::nemstr($model)) return null;
+        $mdcs = $this->context["model"];
+        if (isset($mdcs[$model])) {
+            $mdc = $mdcs[$model];
+            $mdn = $model;
         } else {
-            $conf = [];
+            $mdn = lcfirst($model);
+            if (isset($mdcs[$mdn])) {
+                $mdc = $mdcs[$mdn];
+            } else {
+                return null;
+            }
         }
-        $cfg = new self($conf);
-        $cfg->db = $db;
-        return $cfg;
+
+        /**
+         * 开始解析 model 参数
+         */
+        $conf = [];
+        //数据模型(表) 类全称
+        $mdcls = $this->db->resper->cls($mdn);
+        //解析 columns 字段参数
+        $mdc = $this->parseModelColumnsConf($mdc, $mdcls);
+        //基本参数
+        $ks = explode(",","name,title,desc,columns");
+        foreach ($ks as $i => $k) {
+            if (!isset($mdc[$k])) continue;
+            $conf[$k] = $mdc[$k];
+            $mdcls::$$k = $mdc[$k];
+        }
+        //开始解析
     }
 
     /**
-     * static tools
+     * 解析 model 参数
+     * 解析字段参数
+     * @param Array $mdc 设置内容
+     * @param String $mdcls 数据模型(表) 类全称
+     * @return Array 经过处理的 $mdc
      */
-    //从数据库路径，解析 config 路径
-    protected static function getConfPath($dbpath="")
+    private function parseModelColumnsConf($mdc, $mdcls)
     {
-        $dpa = explode(DS, $dbpath);
-        $l = array_pop($dpa);
-        if (strtolower($l)=="db") $dpa[] = "db";
-        $dpa[] = "config";
-        $confp = implode(DS, $dpa);
-        return $confp;
+
     }
+
 }

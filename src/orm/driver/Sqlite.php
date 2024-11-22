@@ -99,6 +99,7 @@ class Sqlite extends Driver
         //解析数据库参数文件
         $db->config = new Config([
             "type" => "sqlite",
+            "database" => $dbf,
             "dbkey" => $dbkey,
             //设置文件保存在 db_path/config/db_name.json
             "conf" => $pathinfo["dirname"].DS."config".DS.$dbname.self::$confExt
