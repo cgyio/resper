@@ -163,6 +163,16 @@ class WhereParser extends Parser
             Is::nemstr($order) ||
             (Is::nemarr($order) && Is::associate($order))
         ) {
+            if (Is::nemarr($order)) {
+                foreach ($order as $i => $v) {
+                    if (is_numeric($i)) continue;
+                    if (Is::nemstr($v)) {
+                        if (in_array(strtoupper($v), ["DESC","ASC"])) {
+                            $order[$i] = strtoupper($v);
+                        }
+                    }
+                }
+            }
             $this->where["ORDER"] = $order;
         }
         return $this;
@@ -182,7 +192,11 @@ class WhereParser extends Parser
         if (empty($args)) {
             $order = $key;
         } else {
-            $order[$key] = $args[0];
+            if (in_array(strtoupper($args[0]), ["DESC", "ASC"])) {
+                $order[$key] = strtoupper($args[0]);
+            } else {
+                $order = $key;
+            }
         }
         return $this->order($order);
     }

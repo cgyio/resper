@@ -46,6 +46,39 @@ class Config
     ];
 
     /**
+     * 特殊字段设置项
+     *  [
+     *      设置项 => 处理方法 foobar  -->  parseSpecColFoobar()
+     *  ]
+     */
+    public $columnConfKeys = [
+        //hidein
+        "hideintable"   => "hidein",
+        "hideinform"    => "hidein",
+
+        //able
+        "sort"      => "able",
+        "filter"    => "able",
+        "search"    => "able",
+        "sum"       => "able",
+
+        //indexed
+        "includes"  => "indexed",
+        "switch"    => "indexed",
+        
+        //associate
+        "time"      => "associate",
+        "number"    => "associate",
+        "json"      => "associate",
+        "money"     => "associate",
+        "validator" => "associate",
+        "generator" => "associate",
+
+        //单独的处理方法
+        "select"    => "select",
+    ];
+
+    /**
      * build 方法参数
      */
     //解析 model::预设 序列，按此顺序分别解析
@@ -159,7 +192,7 @@ class Config
         $fdc = $this->context["column"];
         if (isset($fdc[$key]) || substr($key, -6)==="Column") {
             $fdn = $key;
-            if (substr($key, -6)==="Column") $fdn = substr($key, 0, -5);
+            if (substr($key, -6)==="Column") $fdn = substr($key, 0, -6);
             if (isset($fdc[$fdn])) return (object)$fdc[$fdn];
         }
 
@@ -167,7 +200,7 @@ class Config
          * $config->searchColumns          -->  [ context["column"][*]["searchable"]==true, ... ]
          * $config->jsonColumns            -->  [ context["column"][*]["isJson"]==true ]
          */
-        if (strlen($key)>6 && substr($key, -7)=="Columns") {
+        if (strlen($key)>7 && substr($key, -7)=="Columns") {
             $k = strtolower(substr($key, 0,-7));
             $k1 = "is".ucfirst($k);
             $k2 = $k."able";
@@ -273,7 +306,7 @@ class Config
             "isId" => false,
             "isRequired" => false,
             //"isNumber" => false,
-            //"isBool" => false,
+            //"isSwitch" => false,
             "isJson" => false,
             "default" => null
         ];
@@ -364,27 +397,34 @@ class Config
     {
         $conf = [];
         $coln = $coli["name"];
-        
-        $spfs = explode(",", "hideintable,hideinform,sort,filter,search,money,bool");
-        $isks = explode(",", "showInTable,showInForm,sortable,filterable,searchable,isMoney,isBool");
-        foreach ($spfs as $i => $ki) {
-            $arr = $init[$ki] ?? [];
-            $inarr = in_array($coln, $arr);
-            $ik = $isks[$i];
-            $rev = substr($ik, 0,6)=="showIn";
-            $conf[$isks[$i]] = $rev ? !$inarr : $inarr;
-        }
 
-        $spfs = explode(",", "times,numbers,jsons,generators");
-        $isks = explode(",", "isTime,isNumber,isJson,isGenerator");
-        $pks = explode(",", "time,number,json,generator");
-        foreach ($spfs as $k => $kk) {
-            $arr = $init[$kk] ?? [];
-            $inarr = isset($arr[$coln]);
-            $conf[$isks[$k]] = $inarr;
-            if ($inarr) {
-                $conf[$pks[$k]] = $arr[$coln];
+        //json 中特殊字段预设参数保存在 $init["column"] 
+        $ocf = $init["column"] ?? [];
+        if (!Is::nemarr($ocf)) return $conf;
+
+        //解析 $this->columnConfKeys 指定的 设置项目
+        $keys = $this->columnConfKeys;
+        foreach ($keys as $key => $m) {
+            $cf = isset($ocf[$key]) ? $ocf[$key] : null;
+            $m = "parseSpecCol".ucfirst($m);
+            $args = [$coln, $key, $cf, $coli, $init];
+            $confi = [];
+            if (method_exists($this, $m)) {
+                $confi = $this->$m(...$args);
+            } else {
+                //未指定处理方法，默认处理
+                if (empty($cf)) {
+                    $k = "is".ucfirst(strtolower($key));
+                    $confi = [ $k => false ];
+                } else if (Is::associate($cf)) {
+                    $confi = $this->parseSpecColAssociate(...$args);
+                } else if (Is::indexed($cf)) {
+                    $confi = $this->parseSpecColIndexed(...$args);
+                } else {
+                    $confi = [ $key => $cf ];
+                }
             }
+            $conf = Arr::extend($conf, $confi);
         }
 
         return $conf;
@@ -401,16 +441,35 @@ class Config
         $conf = [];
         $oconf = $coli;
         $fdn = $coli["name"];
-        if ($fdn=="enable") $conf["isBool"] = true;
-        if ($oconf["isBool"]==true || (isset($conf["isBool"]) && $conf["isBool"]==true)) {
+        /*if (!isset($oconf["isSwitch"])) {
+            var_dump($fdn);
+            var_dump($this->model);
+            var_dump($oconf);
+        }*/
+        if ($fdn=="enable") $conf["isSwitch"] = true;
+        if ($oconf["isSwitch"]==true || (isset($conf["isSwitch"]) && $conf["isSwitch"]==true)) {
             $conf["type"] = [
                 "js" => "boolean",
                 "php" => "Bool"
             ];
         }
-        if ($oconf["isJson"]) {
+        if ($oconf["isJson"]==true) {
             if (isset($oconf["json"]["default"])) {
                 $conf["default"] = $oconf["json"]["default"];
+            }
+        }
+        if ($oconf["isSelect"]==true) {
+            if (isset($oconf["select"]) && $oconf["select"]["multiple"]==true) {
+                $conf["type"] = [
+                    "js" => "array",
+                    "php" => "JSON"
+                ];
+                if ($oconf["isJson"]!=true) {
+                    $conf["isJson"] = true;
+                    $conf["json"] = [
+                        "type" => "indexed"
+                    ];
+                }
             }
         }
         /*if ($oconf["isTime"]==true && isset($oconf["time"]["default"])) {
@@ -452,8 +511,10 @@ class Config
         if ($oconf["isPk"]==true) $cf = $func($fdn, "pk", $cf);
         if ($oconf["isId"]==true) $cf = $func($fdn, "id", $cf);
         if ($oconf["type"]["php"]=="JSON") $cf = $func($fdn, "json", $cf);
+        if ($oconf["isIncludes"]==true) $cf = $func($fdn, "includes", $cf);
         if ($oconf["isTime"]==true) $cf = $func($fdn, "time", $cf);
         if ($oconf["isMoney"]==true) $cf = $func($fdn, "money", $cf);
+        if ($oconf["isSelect"]==true) $cf = $func($fdn, "select", $cf);
         if ($oconf["isGenerator"]==true) $cf = $func($fdn, "gid", $cf);
 
         return $cf;
@@ -568,6 +629,29 @@ class Config
                     "join" => $jfd[$fdi],
                     "isJoin" => true
                 ];
+
+                //当字段存在 join 关联表时，修改 字段的 select 参数
+                $srctbn = array_keys($jfd[$fdi])[0];
+                $colcf = $this->context["column"][$fdi];
+                $colsel = $colcf["isSelect"] ?? false;
+                $ncf = [
+                    "source" => [
+                        "table" => $srctbn,
+                        "value" => $jfd[$fdi][$srctbn]["linkto"]
+                    ]
+                ];
+                if ($colsel) {
+                    $ncf = Arr::extend([
+                        "select" => $colcf["select"]
+                    ], [
+                        "select" => $ncf
+                    ]);
+                } else {
+                    $ncf = $this->parseSpecColSelect($fdi, "select", [
+                        $fdi => $ncf
+                    ], $colcf, $init);
+                }
+                $fdc[$fdi] = Arr::extend($fdc[$fdi], $ncf);
             }
         }
 
@@ -596,6 +680,9 @@ class Config
      *       * ...
      * 
      * 则有计算字段 fooBar
+     * 
+     * 针对 isTime / isMoney 字段，自动添加 输出字符串形式的计算字段 ***Str
+     * 
      * @param Array $init json 中定义的参数
      * @return Config $this
      */
@@ -606,6 +693,8 @@ class Config
             "getters" => [],
             "column" => []
         ];
+
+        //手动定义的计算字段
         $model = $this->model;
         $methods = Cls::methods($model, "protected", function($mi) {
             if (substr($mi->name, -6)==="Getter") {
@@ -616,40 +705,64 @@ class Config
             }
             return false;
         });
-        if (empty($methods)) return $this->setContext($conf);
-        //对找到的方法，进行处理
-        foreach ($methods as $k => $mi) {
-            $doc = $mi->getDocComment();
-            $doc = str_replace("\\r\\n", "", $doc);
-            $doc = str_replace("\\r", "", $doc);
-            $doc = str_replace("\\n", "", $doc);
-            $doc = str_replace("*\/", "", $doc);
-            $da = explode("* @", $doc);
-            array_shift($da);   //* getter
-            $confi = [];
-            foreach ($da as $i => $di) {
-                $dai = explode(" ", trim(explode("*", $di)[0]));
-                if (count($dai)<2) continue;
-                if (in_array($dai[0],["param","return"])) continue;
-                $dk = $dai[0];
-                $dv = implode(" ",array_slice($dai, 1));
-                if (strpos($dk, "type")!==false) {
-                    $dkk = str_replace("type","", $dk);
-                    if ($dkk=="") $dkk = "db";
-                    $confi["type"][$dkk] = $dv;
-                } else {
-                    $confi[$dk] = $dv;
+        if (!empty($methods)) {
+            //对找到的方法，进行处理
+            foreach ($methods as $k => $mi) {
+                $doc = $mi->getDocComment();
+                $doc = str_replace("\\r\\n", "", $doc);
+                $doc = str_replace("\\r", "", $doc);
+                $doc = str_replace("\\n", "", $doc);
+                $doc = str_replace("*\/", "", $doc);
+                $da = explode("* @", $doc);
+                array_shift($da);   //* getter
+                $confi = [];
+                foreach ($da as $i => $di) {
+                    $dai = explode(" ", trim(explode("*", $di)[0]));
+                    if (count($dai)<2) continue;
+                    if (in_array($dai[0],["param","return"])) continue;
+                    $dk = $dai[0];
+                    $dv = implode(" ",array_slice($dai, 1));
+                    if (strpos($dk, "type")!==false) {
+                        $dkk = str_replace("type","", $dk);
+                        if ($dkk=="") $dkk = "db";
+                        $confi["type"][$dkk] = $dv;
+                    } else {
+                        $confi[$dk] = $dv;
+                    }
                 }
+                $name = $confi["name"] ?? "";
+                if (!Is::nemstr($name)) {
+                    $name = str_replace("Getter","", $k);
+                    $confi["name"] = $name;
+                }
+                $confi["isGetter"] = true;
+                $conf["getters"][] = $name;
+                $conf["column"][$name] = $confi;
             }
-            $name = $confi["name"] ?? "";
-            if (!Is::nemstr($name)) {
-                $name = str_replace("Getter","", $k);
-                $confi["name"] = $name;
-            }
-            $confi["isGetter"] = true;
-            $conf["getters"][] = $name;
-            $conf["column"][$name] = $confi;
         }
+
+        //针对 isTime / isMoney 字段 自动定义计算字段 ***Str
+        $colc = $this->context["column"] ?? [];
+        foreach ($colc as $coln => $coli) {
+            if ($coli["isTime"]!=true && $coli["isMoney"]!=true) continue;
+            $fn = $coln."Str";
+            $fc = [
+                "name" => $fn,
+                "title" => $coli["title"],
+                "desc" => $coli["desc"]." (文字形式)",
+                "width" => $coli["width"],
+                "type" => [
+                    "db" => "varchar",
+                    "js" => "string",
+                    "php" => "String"
+                ],
+                "isGetter" => true,
+                "origin" => $coln,
+            ];
+            $conf["getters"][] = $fn;
+            $conf["column"][$fn] = $fc;
+        }
+
         return $this->setContext($conf);
     }
 
@@ -742,7 +855,9 @@ class Config
     {
         $init = !Is::nemarr($init) ? $this->init : $init;
         $conf = [];
-        $ms = explode(",", "name,title,desc,directedit,includes");
+
+        //meta 字段
+        $ms = explode(",", "name,title,desc,directedit");
         foreach ($ms as $i => $mi) { 
             if (isset($init[$mi])) {
                 $conf[$mi] = $init[$mi];
@@ -751,20 +866,200 @@ class Config
         $conf["table"] = lcfirst($conf["name"]);
         $conf["name"] = ucfirst($conf["name"]);
 
-        //检查特殊字段
+        //includes 每次查询必须包含字段
         $incs = $conf["includes"] ?? [];
         $fds = $this->context["columns"];
         $specs = $this->context["special"];
+        $sincs = $specs["includes"] ?? [];
         $ids = $specs["id"] ?? [];
         $gids = $specs["gid"] ?? [];
+        if (!empty($sincs)) $incs = array_merge($sincs, $incs);
         if (!empty($gids)) $incs = array_merge($gids, $incs);
         if (!empty($ids)) $incs = array_merge($ids, $incs);
         if (in_array("enable", $fds) && !in_array("enable", $incs)) $incs[] = "enable";
         $incs = array_merge(array_flip(array_flip($incs)));     //去重
         $conf["includes"] = $incs;
+        $conf["special"] = [
+            "includes" => $incs
+        ];
+
+        //package 字段
+        $pkg = $init["column"]["package"] ?? [];
+        $npkg = [];
+        if (Is::nemstr($pkg)) {
+            //指定了包含 package 信息的 字段，此字段的 join 关联表中包含字段数据
+            $jtb = Arr::find($this->context, "join/column/$pkg");
+            if (Is::nemarr($jtb)) {
+                //找到关联表
+                $jtbn = array_keys($jtb)[0];
+                $mdi = $this->model::$db->model($jtbn);
+                if (Is::nemstr($mdi)) {
+                    //关联表初始化，获取关联表的 package 参数 [ unit=>"unit column", netwt=>"", ... ]
+                    $pkgs = $mdi::$config->context["package"];
+                    foreach ($pkgs as $k => $v) {
+                        //为 关联表的 package 相关字段名 增加 tbn_ 前缀
+                        //这样就可以在在当前表中，通过 $rs->tbn_coln 访问 关联表字段值
+                        $npkg[$k] = $jtbn."_".$v;
+                    }
+                }
+            }
+        } else if (Is::nemarr($pkg)) {
+            //package 字段包括这些
+            $ks = ["unit","netwt","maxunit","minnum"];
+            if (Is::indexed($pkg)) {
+                //按顺序指定 package 字段名
+                for ($i=0;$i<count($pkg);$i++) {
+                    $npkg[$ks[$i]] = $pkg[$i];
+                }
+            } else if (Is::associate($pkg)) {
+                //手动指定 各 package 字段名
+                $npkg = $pkg;
+                for ($i=0;$i<count($ks);$i++) {
+                    $ki = $ks[$i];
+                    if (!isset($npkg[$ki])) {
+                        $npkg[$ki] = $ki;
+                    }
+                }
+            }
+        } 
+        if (!empty($npkg)) {
+            $conf["package"] = $npkg;
+        }
 
         return $this->setContext($conf);
     }
+
+
+
+    /**
+     * json 中 特殊字段设置项 解析方法，设置内容保存在 $init["column"] 中
+     * parseSpecColFoobar()
+     * 遵循下列参数要求：
+     * @param String $coln 字段名
+     * @param Array $key 要解析的 json 中的某项特殊字段设置项 名称
+     * @param Array $cf 要解析的 json 中的某项特殊字段设置项 的内容
+     * @param Array $coli 此字段当前已解析得到的参数内容
+     * @param Array $init json 预设参数全部内容
+     * @return Array 解析得到的字段参数
+     */
+    //解析 hideintable / hideinform
+    protected function parseSpecColHidein($coln, $key, $cf, $coli, $init)
+    {
+        $k = "showIn".ucfirst(strtolower(str_replace("hidein", "", $key)));
+        $conf = [ $k => true ];
+        if (!Is::nemarr($cf) || !Is::indexed($cf)) return $conf;
+        $conf[$k] = !in_array($coln, $cf);
+        return $conf;
+    }
+    //解析 sort / filter / search / sum
+    protected function parseSpecColAble($coln, $key, $cf, $coli, $init)
+    {
+        $k = $key."able";
+        $conf = [ $k => false ];
+        if (!Is::nemarr($cf) || !Is::indexed($cf)) return $conf;
+        $conf[$k] = in_array($coln, $cf);
+        return $conf;
+    }
+    //解析 设置值为 associate array 以 字段名称 作为数组键名的 设置项
+    protected function parseSpecColAssociate($coln, $key, $cf, $coli, $init)
+    {
+        $pk = strtolower($key);
+        $k = "is".ucfirst($pk);
+        $conf = [
+            $k => false
+        ];
+        if (!Is::nemarr($cf)) return $conf;
+        //各设置项的默认值
+        $dft = [
+            //定义项目默认值 time,number,json,money,validator,generator
+            "time" => [
+                "type" => "datetime"
+            ],
+            "number" => [
+                "precision" => 4,
+                "step" => 0.0001
+            ],
+            "json" => [
+                "type" => "associate",
+                "default" => Conv::j2a("{}")
+            ],
+            "money" => [
+                "precision" => 2,
+                "icon" => "￥"
+            ],
+            "validator" => [],
+            "generator" => []
+        ];
+        if (Is::indexed($cf)) {
+            //如果设置项未指定具体参数，则使用默认值
+            $conf[$k] = in_array($coln, $cf);
+            if ($conf[$k]==true) $conf[$pk] = $dft[$pk] ?? [];
+        } else {
+            //如果指定了具体参数
+            $conf[$k] = isset($cf[$coln]);
+            if ($conf[$k]==true) {
+                $cv = $cf[$coln];
+                //根据 设置项目 决定设置参数
+                switch ($pk) {
+                    //case "json": break;
+
+                    //默认情况
+                    default:
+                        if (Is::nemarr($cv) && Is::associate($cv)) {
+                            $conf[$pk] = Arr::extend($dft[$pk], $cv);
+                        } else if (Is::nemstr($cv)) {
+                            if (isset($dft[$pk]["type"])) {
+                                $conf[$pk] = Arr::extend($dft[$pk], [ "type" => $cv ]);
+                            } else {
+                                $conf[$pk] = $cv;
+                            }
+                        } else {
+                            $conf[$pk] = $cv;
+                        }
+                        break;
+                }
+            }
+        }
+        
+        return $conf;
+    }
+    //解析 设置值为 indexed array 字段名称数组的 设置项
+    protected function parseSpecColIndexed($coln, $key, $cf, $coli, $init)
+    {
+        $k = "is".ucfirst(strtolower($key));
+        $conf = [ $k => false ];
+        if (!Is::nemarr($cf) || !Is::indexed($cf)) return $conf;
+        $conf[$k] = in_array($coln, $cf);
+        return $conf;
+    }
+    //解析 select
+    protected function parseSpecColSelect($coln, $key, $cf, $coli, $init)
+    {
+        $pk = strtolower($key);
+        $k = "is".ucfirst($pk);
+        $conf = [
+            $k => false
+        ];
+        if (!Is::nemarr($cf) || !Is::associate($cf) || !isset($cf[$coln])) return $conf;
+        $cv = $cf[$coln];
+        $conf[$k] = Is::nemarr($cv) && Is::associate($cv);
+        if ($conf[$k]!=true) return $conf;
+        $conf[$pk] = Arr::extend([
+            "dynamic" => true,
+            "multiple" => false,
+            "allow-create" => false,
+            "source" => [
+                "values" => [],
+                "api" => "",
+                "table" => "",
+                "label" => "",
+                "value" => "",
+                "where" => []
+            ]
+        ], $cv);
+        return $conf;
+    }
+
 
 
 

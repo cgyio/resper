@@ -406,7 +406,7 @@ class Model extends Record
      * @param String $model 表名，不指定 则 返回当前 Model
      * @return Class 类全称 or null
      */
-    public static function cls($model="")
+    public static function __cls($model="")
     {
         //当前 类全称
         $cls = static::class;

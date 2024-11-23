@@ -13,6 +13,7 @@ use Cgy\orm\model\ModelSet;
 use Cgy\util\Is;
 use Cgy\util\Arr;
 use Cgy\util\Str;
+use Cgy\util\Conv;
 
 class Exporter 
 {
@@ -168,12 +169,22 @@ class Exporter
         }
         if (!empty($mapper)) return $this->mapper($mapper);
 
+        $gfds = $this->conf->getters;
+        $jtbs = $this->rs->joined;
+
         /**
          * $key == "" | "_"
          * $rs->ctx() == $rs->_ == $rs->context
-         * 输出 主表数据
+         * 输出 主表数据 包含 getter 计算字段
          */
-        if (empty($key) || $key=="" || $key=="_") return $this->rs->context;
+        if (empty($key) || $key=="" || $key=="_") {
+            $ctx = $this->rs->context;
+            foreach ($gfds as $getter) {
+                $gk = Str::snake($getter, "_");
+                $ctx[$gk] = $this->export($getter);
+            }
+            return $ctx;
+        }
 
         /**
          * $key == "all"
@@ -189,16 +200,17 @@ class Exporter
          * 返回主表 字段值
          */
         if (isset($this->rs->context[$key])) return $this->rs->context[$key];
-        $gfds = $this->conf->getters;
         if (in_array($key, $gfds)) {
-            return $this->rs->$key();
+            //手动定义的 getter 计算字段
+            $m = $key."Getter";
+            if (method_exists($this->rs, $m)) return $this->rs->$key();
+            //根据字段类型 自动定义的 getter 计算字段
+            return $this->autoGetter($key);
         }
 
         /**
          * 返回关联表 实例 或 关联表数据
          */
-        $jtbs = $this->rs->joined;
-
         /**
          * $key == PskuRs
          * $rs->ctx("PskuRs") == $rs->PskuRs == $rs->joined["Psku"]
@@ -282,4 +294,217 @@ class Exporter
         }
         return $rtn;
     }
+
+    /**
+     * 输出 根据字段类型 自动生成的 getter 的 计算字段值
+     * 如：isTime 字段 会生成 ***Str 计算字段
+     * @param String $getter 计算字段名称
+     * @return Mixed 计算得到的字段值
+     */
+    public function autoGetter($getter)
+    {
+        $gc = $this->conf->$getter;
+        if (empty($gc)) return null;
+        $coln = $gc->origin;
+        if (!Is::nemstr($coln) || !in_array($coln, $this->conf->columns)) return null;
+
+        $colc = $this->conf->$coln;
+        $colv = $this->export($coln);
+        $empty = $this->empty($getter); //空值
+        if (empty($colv)) return $empty;
+
+        $ctp = str_replace($coln, "", $getter);     // Str
+        switch ($ctp) {
+            // $getter == ***Str
+            case "Str":
+                //指定类型的字段，输出字符串值
+                return $this->to("string", $coln);
+                break;
+        }
+        
+    }
+
+
+
+    /**
+     * tools
+     */
+
+    /**
+     * 根据字段类型，输出空值
+     * @param String $col 字段名
+     * @return Mixed 空值内容
+     */
+    public function empty($col)
+    {
+        $colc = $this->conf->$col;
+        if (empty($colc)) return null;
+        $tp = $colc->type;
+        $ptp = $tp["php"];
+
+        switch ($ptp) {
+            case "String": return ""; break;
+            case "JSON": return []; break;
+            case "Int":
+            case "Number":
+                return 0;
+                break;
+        }
+    }
+
+    /**
+     * 转换字段值 的 类型
+     * @param String $to 要转换为的 类型
+     *      支持的类型：varchar/string/int/float/number/array/indexed/associate/bool
+     * @param String $col 字段名
+     * @param Mixed $data 字段值，不提供则 == $this->rs->$col
+     * @return Mixed 转换后的 字段值
+     */
+    public function to($to, $col, $data = null)
+    {
+        $colc = $this->conf->$col;
+        if (empty($colc)) return null;
+        $data = is_null($data) ? $this->rs->$col : $data;
+        if (empty($data)) $data = $this->empty($col);
+        $m = "to".ucfirst(strtolower($to));
+        if (method_exists($this, $m)) return $this->$m($data, $colc, $col);
+
+        return $data;
+    }
+
+    /**
+     * 字段值 类型转换 方法
+     * 参数遵循：
+     * @param Mixed $data 字段值，不提供则 == $this->rs->$col
+     * @param String $colc 字段设置
+     * @param String $col 字段名
+     * @return Mixed 转换后的 字段值
+     */
+    //to varchar
+    protected function toVarchar($data, $colc, $col = null)
+    {
+        if (is_array($data)) {
+            if (!empty($data)) {
+                if ($colc->isTime==true) {
+                    //时间区间 转为 字符串
+                    $tc = $colc->time;
+                    $ttp = $tc["type"];
+                    $range = substr($ttp, -6) == "-range";
+                    $ttp = str_replace("-range","",$ttp);
+                    if ($range) {
+                        return array_map(function($i) use ($ttp) {
+                            if (!is_numeric($i) || !is_int($i*1)) return "";
+                            $fo = $ttp=="datetime" ? "Y-m-d H:i:s" : "Y-m-d";
+                            return date($fo, $i*1);
+                        }, $data);
+                    }
+                }
+                return Conv::a2j($data);
+            }
+            if ($colc->isJson==true) {
+                $jc = $colc->json;
+                return $jc["type"]=="indexed" ? "[]" : "{}";
+            }
+        }
+        if (is_bool($data)) return $data==true ? "1" : "0";
+        if (Is::any($data, "int,float,numeric")) {
+            if ($colc->isTime==true) {
+                //时间日期 转为 字符串
+                $tc = $colc->time;
+                $ttp = $tc["type"];
+                $range = substr($ttp, -6) == "-range";
+                if (!$range) {
+                    $fo = $ttp=="datetime" ? "Y-m-d H:i:s" : "Y-m-d";
+                    return date($fo, $data*1);
+                }
+            }
+            if ($colc->isMoney==true) {
+                //金额 转为 字符串
+                $mc = $colc->money;
+                $prec = $mc["precision"];
+                $data = round($data * pow(10,$prec))/pow(10,$prec);
+                return $mc["icon"].$data;
+            }
+            return $data."";
+        }
+        if (is_string($data)) return $data;
+        if (is_null($data) || empty($data)) return "";
+        return "";
+    }
+    //to string
+    protected function toString($data, $colc, $col = null)
+    {
+        return $this->toVarchar($data, $colc, $col);
+    }
+    //to integer
+    protected function toInteger($data, $colc, $col = null)
+    {
+        if (Is::any($data, "int,float,numeric")) {
+            $data = $data*1;
+            return (int)$data;
+        }
+        if (is_bool($data)) return $data==true ? 1 : 0;
+        if (is_null($data) || empty($data)) return 0;
+        return 0;
+    }
+    //to float
+    protected function toFloat($data, $colc, $col = null)
+    {
+        if (Is::any($data, "int,float,numeric")) {
+            $data = $data*1;
+            return (float)$data;
+        }
+        if (is_bool($data)) return $data==true ? 1 : 0;
+        if (is_null($data) || empty($data)) return 0;
+        return 0;
+    }
+    //to number
+    protected function toNumber($data, $colc, $col = null)
+    {
+        if (Is::any($data, "int,float,numeric")) {
+            $data = $data*1;
+            return $data;
+        }
+        if (is_bool($data)) return $data==true ? 1 : 0;
+        if (is_null($data) || empty($data)) return 0;
+        return 0;
+    }
+    //to array
+    protected function toArray($data, $colc, $col = null)
+    {
+        if (Is::all($data, "string,json")) return Conv::j2a($data);
+        if (is_array($data)) return $data;
+        if (Is::any($data, "bool,null,int,float") || empty($data)) return [];
+        return $data;
+    }
+    //to indexed array
+    protected function toIndexed($data, $colc, $col = null)
+    {
+        if (Is::all($data, "string,json")) return Conv::j2a($data);
+        if (is_string($data) && $data=="") return Conv::j2a("[]");
+        if (Is::indexed($data) && !empty($data)) return $data;
+        if (Is::any($data, "bool,null,int,float") || empty($data)) return Conv::j2a("[]");
+        return Conv::j2a("[]");
+    }
+    //to associate array
+    protected function toAssociate($data, $colc, $col = null)
+    {
+        if (Is::all($data, "string,json")) return Conv::j2a($data);
+        if (is_string($data) && $data=="") return Conv::j2a("{}");
+        if (Is::associate($data) && !empty($data)) return $data;
+        if (Is::any($data, "bool,null,int,float") || empty($data)) return Conv::j2a("{}");
+        return Conv::j2a("{}");
+    }
+    //to bool
+    protected function toBool($data, $colc, $col = null)
+    {
+        if (Is::all($data, "string,numeric")) {
+            $data = $this->toInteger($data, $colc, $col);
+            return $data==1;
+        }
+        if (Is::any($data, "int,float")) return $data==1;
+        if (is_bool($data)) return $data;
+        return false;
+    }
+
 }

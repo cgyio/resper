@@ -22,9 +22,12 @@ class Is extends Util
     protected static function chk($all, $any, ...$types)
     {
         $flag = $all;
+        if (count($types)==1 && strpos($types[0], ",")!==false) {
+            $types = explode(",", $types[0]);
+        }
         $type = null;
         for ($i=0;$i<count($types);$i++) {
-            $tpi = $types[$i];
+            $tpi = trim($types[$i]);
             $flagi = false;
             $m = strtolower($tpi);
             if (method_exists(self::class, $m)) {

@@ -252,11 +252,19 @@ class Record
          * $rs->getterFunc()
          * 调用 数据表(模型) 实例 getter 方法
          */
-        $gfds = static::$config->getters;
+        $conf = static::$config;
+        $gfds = $conf->getters;
         if (in_array($method, $gfds)) {
+            //手动定义的 getter
             $getter = $method."Getter";
             if (method_exists($this, $getter)) {
                 return $this->$getter();
+            }
+
+            //根据字段类型 自动定义的 getter
+            $exper = $this->exporter;
+            if ($exper instanceof Exporter) {
+                return $exper->autoGetter($method);
             }
         }
 
