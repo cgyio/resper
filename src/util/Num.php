@@ -13,7 +13,7 @@ class Num extends Util
 {
 
     //默认保留小数位数
-    public static $dig = 2;
+    public static $dig = 4;
 
     
     /**
@@ -27,6 +27,26 @@ class Num extends Util
         $dig = !is_int($dig) ? self::$dig : $dig;
         $d = 10 ** $dig;
         return round($num*$d)/$d;
+    }
+
+    /**
+     * 四舍五入 到指定位数 补足位数
+     * 3.14  --四位小数-->  3.1400
+     * @param Numeric $num 
+     * @param Int $dig 保留小数位数
+     * @return Numeric
+     */
+    public static function roundPad($num, $dig = null)
+    {
+        $dig = !is_int($dig) ? self::$dig : $dig;
+        $n = self::round($num, $dig);
+        $ns = $n."";
+        if (strpos($ns,".")===false) {
+            return $ns.".".str_pad("",$dig,"0");
+        }
+        $na = explode(".", $ns);
+        if (strlen($na[1])==$dig) return $n;
+        return $na[0].".".str_pad($na[1],$dig,"0");
     }
 
     /**

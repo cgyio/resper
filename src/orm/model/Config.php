@@ -82,12 +82,12 @@ class Config
      * build 方法参数
      */
     //解析 model::预设 序列，按此顺序分别解析
-    public $buildQueue = [
+    /*public $buildQueue = [
         "meta",     //解析 $model::$creation/$meta 参数，得到基本的 field 信息
         "special",  //解析 $model::$special 参数
 
         "final",    //最后再次解析
-    ];
+    ];*/
 
 
     /**
@@ -152,8 +152,10 @@ class Config
             $this->parseApi();
             // 6  解析其他参数
             $this->parseModelMeta();
+            // 7  调用 各 数据模型 自定义的 (可能通过 trait 引入的) 参数解析方法
+            $this->parseCustomConf();
 
-            // 7  创建运行时 config 文件，加快运行速度
+            // 最后  创建运行时 config 文件，加快运行速度
             //TODO: 保存到 [dbpath]/runtime/[dbname]/[modelname].json
             //...
             
@@ -758,6 +760,7 @@ class Config
                 ],
                 "isGetter" => true,
                 "origin" => $coln,
+                "method" => $coli["isTime"]==true ? "timeStrAutoGetters" : "moneyStrAutoGetters"
             ];
             $conf["getters"][] = $fn;
             $conf["column"][$fn] = $fc;
@@ -883,47 +886,39 @@ class Config
             "includes" => $incs
         ];
 
-        //package 字段
-        $pkg = $init["column"]["package"] ?? [];
-        $npkg = [];
-        if (Is::nemstr($pkg)) {
-            //指定了包含 package 信息的 字段，此字段的 join 关联表中包含字段数据
-            $jtb = Arr::find($this->context, "join/column/$pkg");
-            if (Is::nemarr($jtb)) {
-                //找到关联表
-                $jtbn = array_keys($jtb)[0];
-                $mdi = $this->model::$db->model($jtbn);
-                if (Is::nemstr($mdi)) {
-                    //关联表初始化，获取关联表的 package 参数 [ unit=>"unit column", netwt=>"", ... ]
-                    $pkgs = $mdi::$config->context["package"];
-                    foreach ($pkgs as $k => $v) {
-                        //为 关联表的 package 相关字段名 增加 tbn_ 前缀
-                        //这样就可以在在当前表中，通过 $rs->tbn_coln 访问 关联表字段值
-                        $npkg[$k] = $jtbn."_".$v;
-                    }
-                }
+        return $this->setContext($conf);
+    }
+
+    /**
+     * 当 数据模型 自定义 (或 通过 trait 引入了) 设置参数解析方法
+     * 则 在此处 调用
+     * @param Array $init json 中定义的参数
+     * @return Config $this
+     */
+    protected function parseCustomConf($init = [])
+    {
+        $init = !Is::nemarr($init) ? $this->init : $init;
+        $conf = [];
+        $model = $this->model;
+        
+        //在 model 类中 查找 customConf*** 方法 必须是 public static
+        $methods = Cls::methods($model, "public", function($mi) {
+            if (substr($mi->name, 0,10)==="customConf") {
+                return $mi->isStatic();
             }
-        } else if (Is::nemarr($pkg)) {
-            //package 字段包括这些
-            $ks = ["unit","netwt","maxunit","minnum"];
-            if (Is::indexed($pkg)) {
-                //按顺序指定 package 字段名
-                for ($i=0;$i<count($pkg);$i++) {
-                    $npkg[$ks[$i]] = $pkg[$i];
-                }
-            } else if (Is::associate($pkg)) {
-                //手动指定 各 package 字段名
-                $npkg = $pkg;
-                for ($i=0;$i<count($ks);$i++) {
-                    $ki = $ks[$i];
-                    if (!isset($npkg[$ki])) {
-                        $npkg[$ki] = $ki;
-                    }
-                }
+            return false;
+        });
+        if (empty($methods)) return $this->setContext($conf);
+        
+        //执行 找到的 自定义参数解析方法
+        foreach ($methods as $k => $mi) {
+            $mn = $mi->name;
+            //执行 参数解析方法
+            $confi = $model::$mn($this->context, $init);
+            //解析得到的参数 合并到 context
+            if (Is::nemarr($confi) && Is::associate($confi)) {
+                $conf = Arr::extend($conf, $confi);
             }
-        } 
-        if (!empty($npkg)) {
-            $conf["package"] = $npkg;
         }
 
         return $this->setContext($conf);
@@ -984,7 +979,7 @@ class Config
                 "default" => Conv::j2a("{}")
             ],
             "money" => [
-                "precision" => 2,
+                "precision" => 4,
                 "icon" => "￥"
             ],
             "validator" => [],

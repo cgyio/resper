@@ -201,11 +201,12 @@ class Exporter
          */
         if (isset($this->rs->context[$key])) return $this->rs->context[$key];
         if (in_array($key, $gfds)) {
+            return $this->rs->$key();
             //手动定义的 getter 计算字段
-            $m = $key."Getter";
-            if (method_exists($this->rs, $m)) return $this->rs->$key();
+            //$m = $key."Getter";
+            //if (method_exists($this->rs, $m)) return $this->rs->$key();
             //根据字段类型 自动定义的 getter 计算字段
-            return $this->autoGetter($key);
+            //return $this->autoGetter($key);
         }
 
         /**
@@ -295,35 +296,6 @@ class Exporter
         return $rtn;
     }
 
-    /**
-     * 输出 根据字段类型 自动生成的 getter 的 计算字段值
-     * 如：isTime 字段 会生成 ***Str 计算字段
-     * @param String $getter 计算字段名称
-     * @return Mixed 计算得到的字段值
-     */
-    public function autoGetter($getter)
-    {
-        $gc = $this->conf->$getter;
-        if (empty($gc)) return null;
-        $coln = $gc->origin;
-        if (!Is::nemstr($coln) || !in_array($coln, $this->conf->columns)) return null;
-
-        $colc = $this->conf->$coln;
-        $colv = $this->export($coln);
-        $empty = $this->empty($getter); //空值
-        if (empty($colv)) return $empty;
-
-        $ctp = str_replace($coln, "", $getter);     // Str
-        switch ($ctp) {
-            // $getter == ***Str
-            case "Str":
-                //指定类型的字段，输出字符串值
-                return $this->to("string", $coln);
-                break;
-        }
-        
-    }
-
 
 
     /**
@@ -384,49 +356,14 @@ class Exporter
     protected function toVarchar($data, $colc, $col = null)
     {
         if (is_array($data)) {
-            if (!empty($data)) {
-                if ($colc->isTime==true) {
-                    //时间区间 转为 字符串
-                    $tc = $colc->time;
-                    $ttp = $tc["type"];
-                    $range = substr($ttp, -6) == "-range";
-                    $ttp = str_replace("-range","",$ttp);
-                    if ($range) {
-                        return array_map(function($i) use ($ttp) {
-                            if (!is_numeric($i) || !is_int($i*1)) return "";
-                            $fo = $ttp=="datetime" ? "Y-m-d H:i:s" : "Y-m-d";
-                            return date($fo, $i*1);
-                        }, $data);
-                    }
-                }
-                return Conv::a2j($data);
-            }
+            if (!empty($data)) return Conv::a2j($data);
             if ($colc->isJson==true) {
                 $jc = $colc->json;
                 return $jc["type"]=="indexed" ? "[]" : "{}";
             }
         }
         if (is_bool($data)) return $data==true ? "1" : "0";
-        if (Is::any($data, "int,float,numeric")) {
-            if ($colc->isTime==true) {
-                //时间日期 转为 字符串
-                $tc = $colc->time;
-                $ttp = $tc["type"];
-                $range = substr($ttp, -6) == "-range";
-                if (!$range) {
-                    $fo = $ttp=="datetime" ? "Y-m-d H:i:s" : "Y-m-d";
-                    return date($fo, $data*1);
-                }
-            }
-            if ($colc->isMoney==true) {
-                //金额 转为 字符串
-                $mc = $colc->money;
-                $prec = $mc["precision"];
-                $data = round($data * pow(10,$prec))/pow(10,$prec);
-                return $mc["icon"].$data;
-            }
-            return $data."";
-        }
+        if (Is::any($data, "int,float,numeric")) return $data."";
         if (is_string($data)) return $data;
         if (is_null($data) || empty($data)) return "";
         return "";
