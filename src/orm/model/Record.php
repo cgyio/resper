@@ -15,6 +15,7 @@ use Cgy\util\Is;
 use Cgy\util\Str;
 use Cgy\util\Arr;
 use Cgy\util\Num;
+use Cgy\util\Cls;
 
 class Record 
 {
@@ -63,7 +64,7 @@ class Record
         $this->exporter = new Exporter($this);
         
         //创建事件订阅，订阅者为此 数据表记录实例
-        /*Orm::eventRegist($this);
+        //Orm::eventRegist($this);
 
         //执行 可能存在的 initInsFooBar() 通常由 实现各种数据操作功能的 traits 引入
         $this->initInsQueue();
@@ -71,7 +72,7 @@ class Record
         $this->initInsFinal();
 
         //触发 数据记录实例化 事件
-        Orm::eventTrigger("model-insed", $this);*/
+        //Orm::eventTrigger("model-insed", $this);
     }
 
     /**
@@ -140,7 +141,7 @@ class Record
     {
         $model = static::$cls;
         //var_dump($model);
-        $ms = cls_get_ms($model, function($mi) {
+        $ms = Cls::methods($model, "protected", function($mi) {
             if (substr($mi->name, 0, 7)==="initIns") {
                 //必须是实例方法
                 if ($mi->isStatic()) return false;
@@ -148,7 +149,7 @@ class Record
                 return !in_array(strtolower($mk), ["data","queue","final"]);
             }
             return false;
-        }, "protected");
+        });
         if (empty($ms)) return $this;
         foreach ($ms as $n => $mi) {
             $fn = $mi->name;

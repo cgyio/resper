@@ -27,6 +27,12 @@ trait Package
     ];
 
     /**
+     * 定义在 数据记录实例上的 Packager 计算类实例
+     * 专门用于操作 针对此条数据记录的 package 规格数据
+     */
+    public $Packager = null;
+
+    /**
      * 数据模型(表) 自定义参数解析方法
      * 在 数据模型(表) 类 初始化时，通过 model\Config 类调用
      * 自定义参数： package
@@ -148,6 +154,21 @@ trait Package
         }
         
         return [];
+    }
+
+    /**
+     * initIns*** 方法
+     * 数据记录实例 构造时 执行
+     * 针对 package 数据 创建一个 Packager 计算类实例
+     * @return $this
+     */
+    protected function initInsPackage()
+    {
+        $this->Packager = [
+            "foo" => "bar"
+        ];
+
+        return $this;
     }
 
 
