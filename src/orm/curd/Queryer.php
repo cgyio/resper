@@ -1,9 +1,11 @@
 <?php
 /**
  * cgyio/resper 数据库操作
- * 直接调用 php://input 传入的 json 参数 作为查询参数，生成 medoo 查询参数
+ * 处理复合查询条件，生成 medoo 查询参数
  * 
- *  input 传入的 json 参数格式：[
+ * 通常通过 php://input 传入符合查询条件，其格式为：
+ * 
+ *  [
  *      "query" => [
  *          "search" => "foo,bar，jaz",
  *          "filter" => [
@@ -46,7 +48,7 @@ use Cgy\util\Is;
 use Cgy\util\Arr;
 use Cgy\util\Str;
 
-class QueryBuilder 
+class Queryer 
 {
     //关联的 Curd 实例
     public $curd = null;
@@ -59,19 +61,22 @@ class QueryBuilder
     protected $cp = null;
     protected $jp = null;
 
-    //json 参数可用键名，将按顺序解析这些参数
+    //符合查询条件 参数可用键名，将按顺序解析这些参数
     protected $keys = [
         "sort",
-        //"search",
-        //"filter",
+        "search",
+        "filter",
         "where",
         "page",
-        //"limit",
+        "limit",
 
         //额外的
-        //"column",
-        //"match"
+        "column",
+        "match"
     ];
+
+    //解析后得到的参数
+    public $context = [];
 
     /**
      * 构造
@@ -86,17 +91,55 @@ class QueryBuilder
         $this->wp = $curd->whereParser;
         $this->cp = $curd->columnParser;
         $this->jp = $curd->joinParser;
+    }
 
-        //读取 当前 Request 实例的 inputs 数据
-        $input = Request::$current->inputs->json;
-        if (Is::nemarr($input) && isset($input["query"])) {
-            $this->input = $input["query"];
+    /**
+     * 读取当前已解析完成的 curd 查询参数
+     * @return Array
+     */
+    protected function args()
+    {
+        return $this->curd->parseArguments();
+    }
+
+    /**
+     * 解析参数
+     * @param Array $extra 传入的复合查询参数
+     * @param Bool $mixin 是否 合并 php://input 数据，默认 true
+     * @return Queryer $this
+     */
+    public function apply($extra = [], $mixin = true)
+    {
+        $hasExtra = Is::nemarr($extra) && Is::associate($extra);
+
+        //未指定查询参数
+        if (!$hasExtra && !$mixin) {
+            $this->context = [];
+            return $this;
         }
 
-        //应用 手动指定的 额外查询参数
-        if (Is::nemarr($extra)) {
-            $this->input = Arr::extend($this->input, $extra);
+        //合并 复合查询条件数据
+        if (!$hasExtra) $extra = [];
+        if ($mixin) {
+            //读取 当前 Request 实例的 inputs 数据
+            $input = Request::$current->inputs->json;
+            if (Is::nemarr($input)) {
+                if (isset($input["query"])) {
+                    $input = $input["query"];
+                } else {
+                    $inp = [];
+                    foreach ($this->keys as $key) {
+                        if (!isset($input[$key])) continue;
+                        $inp[$key] = $input[$key];
+                    }
+                    $input = array_merge([], $inp);
+                }
+            } else {
+                $input = [];
+            }
+            if (!empty($input)) $this->input = $input;
         }
+        $this->context = Arr::extend($input, $extra);
 
         //开始 按 参数可用的 键名 顺序解析
         for ($i=0;$i<count($this->keys);$i++) {
@@ -106,15 +149,8 @@ class QueryBuilder
                 $this->$m();
             }
         }
-    }
 
-    /**
-     * 读取当前已解析完成的 curd 查询参数
-     * @return Array
-     */
-    protected function parsed()
-    {
-        return $this->curd->parseArguments();
+        return $this;
     }
 
 
@@ -129,10 +165,10 @@ class QueryBuilder
      */
     protected function parseSort()
     {
-        $sort = $this->input["sort"] ?? [];
+        $sort = $this->context["sort"] ?? [];
         if (!Is::nemarr($sort)) return $this;
 
-        $sort = array_filter(function($i) {
+        $sort = array_filter($sort, function($i) {
             return Is::nemstr($i) && in_array(strtoupper($i), ["ASC","DESC"]);
         });
 
@@ -148,12 +184,12 @@ class QueryBuilder
      */
     protected function parseWhere()
     {
-        $filter = $this->input["filter"] ?? [];
-        $search = $this->input["search"] ?? "";
-        $where = $this->input["where"] ?? [];
+        $filter = $this->context["filter"] ?? [];
+        $search = $this->context["search"] ?? "";
+        $where = $this->context["where"] ?? [];
 
         $this->wp->filter($filter);
-        $this->wp->keyword($search);
+        $this->wp->search($search);
         $this->wp->setParam($where);
 
         return $this;
@@ -165,8 +201,8 @@ class QueryBuilder
      */
     protected function parsePage()
     {
-        $page = $this->input["page"] ?? [];
-        $limit = $this->input["limit"] ?? [];
+        $page = $this->context["page"] ?? [];
+        $limit = $this->context["limit"] ?? [];
 
         $pagesize = $page["size"] ?? 100;
         $ipage = $page["ipage"] ?? 1;

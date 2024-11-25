@@ -15,7 +15,7 @@ use Cgy\orm\model\ModelSet;
 use Cgy\orm\curd\JoinParser;
 use Cgy\orm\curd\ColumnParser;
 use Cgy\orm\curd\WhereParser;
-use Cgy\orm\curd\QueryBuilder;
+use Cgy\orm\curd\Queryer;
 use Cgy\util\Is;
 use Cgy\util\Str;
 use Cgy\util\Arr;
@@ -59,6 +59,8 @@ class Curd
     public $joinParser = null;
     public $columnParser = null;
     public $whereParser = null;
+    //符合查询条件处理类
+    public $queryer = null;
 
     //支持的 medoo 方法
     protected $medooMethods = [
@@ -86,10 +88,7 @@ class Curd
         $this->joinParser = new JoinParser($this);
         $this->columnParser = new ColumnParser($this);
         $this->whereParser = new WhereParser($this);
-
-        //$this->join = $model::$join;
-        //curd 操作初始化完成后，立即处理 查询字段名数组
-        //$this->field("*");
+        $this->queryer = new Queryer($this);
     }
 
     /**
@@ -181,6 +180,22 @@ class Curd
     }
 
     /**
+     * 构造 medoo 查询参数
+     * 解析 复合查询条件 
+     * @param Array $extra 传入的复合查询参数
+     * @param Bool $mixin 是否 合并 php://input 数据，默认 true
+     * @return Curd $this
+     */
+    public function query($extra = [], $mixin = true)
+    {
+        //通过 curd\Queryer 解析并创建 查询参数
+        $this->queryer->apply($extra, $mixin);
+        //var_dump($this->parseArguments());
+        //return $this->parseArguments();
+        return $this;
+    }
+
+    /**
      * 在执行查询前，生成最终需要的 medoo 查询参数
      * 在查询时，可根据 method 组装成 medoo 方法的 参数 args[]
      * @return Array [ "table"=>"", "join"=>[], "field"=>[], "where"=>[] ]
@@ -196,19 +211,7 @@ class Curd
     }
 
 
-
-    /**
-     * $curd->query 直接调用 php://input 传入的 json 参数 作为查询参数，查询并创建 Model/ModelSet 实例
-     * 使用 curd\QueryBuilder 工具类处理并生成 查询参数
-     * @param Array $extra 在 input 传入的参数基础上，手动增加 extra 额外查询参数
-     * @return ModelSet 记录集实例
-     */
-    public function query($extra = [])
-    {
-        $query = new QueryBuilder($extra);
-        return $this->select();
-    }
-
+    
     /**
      * 执行 medoo 查询
      * 使用 __call 方法
@@ -350,36 +353,6 @@ class Curd
             return $rst;
         }
 
-        /**
-         * $curd->query 直接调用 php://input 传入的 json 参数 作为查询参数，查询并创建 Model/ModelSet 实例
-         *  传入的 json 参数格式：[
-         *      "query" => [
-         *          "search" => "foo,bar，jaz",
-         *          "filter" => [
-         *              "column" => [
-         *                  "logic" => ">=",
-         *                  "value" => 123
-         *              ],
-         *              ...
-         *          ],
-         *          "sort" => [
-         *              "column" => "DESC",
-         *              "column2" => "",
-         *              ...
-         *          ],
-         *          "page" => [
-         *              "size" => 100,
-         *              "ipage" => 3
-         *          ],
-         *          # 手动指定 额外的 查询参数
-         *          "where" => [
-         *              "column[!~]" => "foobar",
-         *              ...
-         *          ],
-         *      ]
-         *  ]
-         */
-
         return null;
     }
 
@@ -389,7 +362,7 @@ class Curd
      * @param String $sk 关键字，可有多个，逗号隔开
      * @return ModelSet  or  null
      */
-    public function search($sk="")
+    public function __search($sk="")
     {
         $wp = $this->whereParser;
         if (!$wp instanceof WhereParser) return $this->unset();

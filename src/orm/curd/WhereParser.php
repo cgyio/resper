@@ -128,20 +128,35 @@ class WhereParser extends Parser
     /**
      * 构造 where 参数
      * 关键字搜索
-     * keyword("sk,sk,...")
+     * search("sk,sk,...")
      * @param String $sk 关键字，可有多个，逗号隔开
      * @return Parser $this
      */
-    public function keyword($sk)
+    public function search($sk)
     {
         if (!Is::nemstr($sk)) return false;
         $ska = explode(",", trim(str_replace("，",",",$sk), ","));
-        $sfds = $this->conf->searchColumns;
-        if (empty($sfds)) return false;
+        //可以搜索的 字段
+        $scols = $this->conf->searchColumns;
+        if (empty($scols)) return false;
+        //有关联表的 字段
+        $jcols = $this->conf->joinColumns;
         $or = [];
-        for ($i=0;$i<count($sfds);$i++) {
-            $fdi = $sfds[$i];
-            $or[$fdi."[~]"] = $ska;
+        for ($i=0;$i<count($scols);$i++) {
+            $col = $scols[$i];
+            if (in_array($col, $jcols)) {
+                //如果要搜索的字段是 关联表字段，则 获取此关联表的 searchable 字段
+                $jtbn = array_keys($this->conf->join["column"][$col])[0];
+                $jtbo = $this->curd->db->model($jtbn);
+                $jtbc = $jtbo::$config;
+                $jtbscols = $jtbc->searchColumns;
+                foreach ($jtbscols as $jtbcol) {
+                    $or[$jtbn.".".$jtbcol."[~]"] = $ska;
+                }
+
+            } else {
+                $or[$col."[~]"] = $ska;
+            }
         }
         return $this->setParam([
             "OR #search keywords" => $or
@@ -342,7 +357,7 @@ class WhereParser extends Parser
             } else if (is_string($col)) {
                 $cola = $this->preTbn($col);
                 $where[$cola] = $colv;
-                unset($where[$col]);
+                if ($col!=$cola) unset($where[$col]);
             }
         }
 
