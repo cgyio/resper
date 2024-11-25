@@ -15,6 +15,7 @@ use Cgy\orm\model\ModelSet;
 use Cgy\orm\curd\JoinParser;
 use Cgy\orm\curd\ColumnParser;
 use Cgy\orm\curd\WhereParser;
+use Cgy\orm\curd\QueryBuilder;
 use Cgy\util\Is;
 use Cgy\util\Str;
 use Cgy\util\Arr;
@@ -197,6 +198,18 @@ class Curd
 
 
     /**
+     * $curd->query 直接调用 php://input 传入的 json 参数 作为查询参数，查询并创建 Model/ModelSet 实例
+     * 使用 curd\QueryBuilder 工具类处理并生成 查询参数
+     * @param Array $extra 在 input 传入的参数基础上，手动增加 extra 额外查询参数
+     * @return ModelSet 记录集实例
+     */
+    public function query($extra = [])
+    {
+        $query = new QueryBuilder($extra);
+        return $this->select();
+    }
+
+    /**
      * 执行 medoo 查询
      * 使用 __call 方法
      * @param String $method medoo 查询方法
@@ -336,6 +349,36 @@ class Curd
             
             return $rst;
         }
+
+        /**
+         * $curd->query 直接调用 php://input 传入的 json 参数 作为查询参数，查询并创建 Model/ModelSet 实例
+         *  传入的 json 参数格式：[
+         *      "query" => [
+         *          "search" => "foo,bar，jaz",
+         *          "filter" => [
+         *              "column" => [
+         *                  "logic" => ">=",
+         *                  "value" => 123
+         *              ],
+         *              ...
+         *          ],
+         *          "sort" => [
+         *              "column" => "DESC",
+         *              "column2" => "",
+         *              ...
+         *          ],
+         *          "page" => [
+         *              "size" => 100,
+         *              "ipage" => 3
+         *          ],
+         *          # 手动指定 额外的 查询参数
+         *          "where" => [
+         *              "column[!~]" => "foobar",
+         *              ...
+         *          ],
+         *      ]
+         *  ]
+         */
 
         return null;
     }

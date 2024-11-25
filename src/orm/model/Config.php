@@ -840,11 +840,11 @@ class Config
             $akey .= ($isStatic ? "-model-api-" : "-api-").$name;
             $confi["authKey"] = $akey;
             if ($isStatic) {
-                $conf["modelApis"][] = $akey;
+                $conf["modelApis"][] = $name;
             } else {
-                $conf["apis"][] = $akey;
+                $conf["apis"][] = $name;
             }
-            $conf["api"][$akey] = $confi;
+            $conf["api"][$name] = $confi;
         }
         return $this->setContext($conf);
     }

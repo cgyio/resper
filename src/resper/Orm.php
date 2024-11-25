@@ -158,9 +158,74 @@ class Orm
         return $db;
     }
 
+    /**
+     * 判断 数据库是否存在
+     * @param String $dbn 数据库名称
+     * @return Mixed 存在则返回正确的数据库名，不存在返回 false
+     */
+    public function hasDb($dbn)
+    {
+        $dbns = $this->config["dbns"] ?? [];
+        if (in_array($dbn, $dbns)) return $dbn;
+        $ldbn = lcfirst($dbn);
+        if (in_array($ldbn, $dbns)) return $ldbn;
+        return false;
+    }
+
+
+
+    /**
+     * 替代 resper 实例，响应数据库操作请求
+     * 发送到 任意 resper 的 db/*** 请求，将被转发到此
+     * @param Array $args 请求的 URI 
+     * @return Mixed
+     */
+    public function response(...$args)
+    {
+        if (empty($args)) trigger_error("orm::无法执行数据库操作，缺少必要参数", E_USER_ERROR);
+
+        //检查 URI 参数是否包含数据库名
+        if (false !== ($dbn = $this->hasDb($args[0]))) {
+            $db = $this->db($dbn);
+            array_shift($args);     //dbn
+            //检查 URI 参数是否包含数据表名
+            if (!empty($args) && false !== $db->hasModel($args[0])) {
+                $model = $db->model($args[0]);
+                array_shift($args); //mdn
+            } else {
+                $model = null;
+            }
+        } else {
+            $db = null;
+            $model = null;
+        }
+
+        //指定了 数据库或数据表 但是未指定 操作方法，则返回 数据库/数据表 的运行时参数
+        if (empty($args) && (!is_null($db) || !is_null($model))) {
+            if (is_null($model)) {
+                $dcf = $db->config->ctx();
+                unset($dcf["model"]);
+                return $dcf;
+            }
+            return $model::$config->context;
+        }
+
+        //执行 数据库/数据表(模型) 的 API 方法
+        $api = array_shift($args);
+        if (is_null($model)) return $db->execApis($api, ...$args);
+        return $model::execApis($api, ...$args);
+        
+    }
+
+
 
     /**
      * static tools
+     */
+
+    /**
+     * 判断 指定的 resper 类路径下，是否存在 数据库/数据表
+     * 通过在
      */
 
     /**

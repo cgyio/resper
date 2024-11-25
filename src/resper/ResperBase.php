@@ -80,6 +80,22 @@ class ResperBase
     }
 
     /**
+     * 响应 Orm 数据库操作 请求
+     * !! 子类 不要 覆盖 !!
+     * @return Mixed
+     */
+    public function db(...$args)
+    {
+        if (empty($this->orm)) {
+            trigger_error("orm::ORM 对象未初始化", E_USER_ERROR);
+            return null;
+        }
+
+        //调用 Orm 实例的 response 方法，响应此请求
+        return $this->orm->response(...$args);
+    }
+
+    /**
      * 解析 URI 最终返回错误
      * !! 子类 不要 覆盖 !!
      * @return Mixed

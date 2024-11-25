@@ -306,38 +306,50 @@ class Model extends Record
      */
 
     /**
-     * 根据 api 方法名 获取 configer->api 参数数据
-     * @param String $api 方法名，不包含结尾的 "Api"
-     * @return Array  or  null
+     * 执行任意 api 操作
+     * @param String $api 方法名，不含末尾 "Api"
+     * @param Array $args URI 参数
+     * @return Mixed
      */
-    public static function getApiConf($api)
+    public static function execApis($api, ...$args)
     {
-        $conf = static::$config;
-        if (!$conf instanceof Configer) return false;
-        $apis = $conf->api;
-        if (!is_notempty_arr($apis)) return false;
-        $ao = null;
-        foreach ($apis as $akey => $aconf) {
-            if (substr($akey, -1*(strlen($api)+1))==="-".$api) {
-                $ao = $aconf;
-                break;
-            }
+        $apic = static::hasApi($api);
+        $isModel = $apic["isModel"];
+        $apin = $apic["name"];
+        $fn = $apin."Api";
+
+        //执行 数据模型(表) api 静态方法
+        if ($isModel) {
+            return static::$fn(...$args);
         }
-        return $ao;
+
+        //执行 数据记录实例 api 实例方法
+        $db = static::$db;
+        $mdn = static::$config->name;
+        //执行 curd->query() 使用 input 传入的参数 创建 ModelSet 实例
+        $rs = $db->$mdn->query();
+        if (!$rs instanceof ModelSet) return null;
+        //查询并创建 ModelSet 记录集实例后，调用 实例 api 方法
+        return $rs->$fn(...$args);
     }
 
     /**
      * 判断是否存在 api
      * @param String $api 方法名，不包含结尾的 "Api"
-     * @return Bool
+     * @return Mixed 存在则返回 $model::$config->api[$api] 参数内容，不存在则返回 false
      */
     public static function hasApi($api)
     {
-        $aconf = static::getApiConf($api);
-        if (!is_notempty_arr($aconf)) return false;
-        //if ($aconf["isModel"]===true) return "static";
-        return true;
+        $conf = static::$config->api;
+        if (isset($conf[$api])) return $conf[$api];
+        $lapi = lcfirst($api);
+        if (isset($conf[$lapi])) return $conf[$lapi];
+        return false;
     }
+
+    /**
+     * 
+     */
 
     /**
      * api

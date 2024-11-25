@@ -552,6 +552,21 @@ class Resper extends ResperBase
      */
     public function path($path = "", $params = null)
     {
+        /**
+         * 如果 $path 已存在
+         */
+        if (file_exists($path)) return $path;
+        if (is_dir($path)) {
+            if (!Is::nemarr($params)) {
+                return $path;
+            } else {
+                if (isset($params["checkDir"]) && $params["checkDir"]==true) {
+                    return $path;
+                }
+            }
+            return null;
+        }
+
         //resper 类型：App / Module / Resper
         $rtp = $this->type;
         //resper 类全称

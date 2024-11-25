@@ -97,6 +97,36 @@ class WhereParser extends Parser
 
     /**
      * 构造 where 参数
+     * 筛选 某些字段
+     * [
+     *      "column" => [
+     *          "logic" => "=/>/</>=/<=/<>/></! 等于/大于/小于/不小于/不大于/之内/之外/不等于",
+     *          "value" => ""/[]
+     *      ]
+     * ]
+     * @param Array $filter 筛选参数
+     * @return Parser $this
+     */
+    public function filter($filter)
+    {
+        $fs = [];
+        foreach ($filter as $coln => $fc) {
+            $flgc = $fc["logic"] ?? "=";
+            $fv = $fc["value"] ?? null;
+            if (is_null($fv) || $fv=="" || (Is::indexed($fv) && count($fv)<=0)) continue;
+            if (in_array($flgc, ["=","=="])) {
+                $ck = $coln;
+            } else {
+                $ck = $coln."[".$flgc."]";
+            }
+            $fs[$ck] = $fv;
+        }
+        if (empty($fs)) return $this;
+        return $this->setParam($fs);
+    }
+
+    /**
+     * 构造 where 参数
      * 关键字搜索
      * keyword("sk,sk,...")
      * @param String $sk 关键字，可有多个，逗号隔开

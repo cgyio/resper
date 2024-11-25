@@ -420,53 +420,6 @@ class Db
     }
 
 
-    /**
-     * table 操作
-     */
-    
-    /**
-     * 实例化数据表
-     * @param String $tbn table name
-     * @return Table instance  or  null
-     */
-    public function __table($tbn)
-    {
-        if ($this->tableInsed($tbn)) return $this->TABLES[$tbn];
-        $tbcls = $this->tableCls($tbn);
-        if (empty($tbcls)) return null;
-        $tbo = new $tbcls($this);
-        $this->TABLES[$tbn] = $tbo;
-        return $tbo;
-    }
-
-    /**
-     * 判断数据表是否已实例化
-     * @param String $tbn table name
-     * @return Bool
-     */
-    public function __tableInsed($tbn)
-    {
-        if (!isset($this->TABLES[$tbn])) return false;
-        $tbo = $this->TABLES[$tbn];
-        return $tbo instanceof Table;
-    }
-
-    /**
-     * 获取数据表 类全称
-     * @param String $tbn table name
-     * @return String table class name
-     */
-    public function __tableCls($tbn)
-    {
-        $dbn = $this->name;
-        $app = $this->app->name;
-        $cls = Orm::cls("$app/table/$dbn/".ucfirst($tbn));
-        if (class_exists($cls)) return $cls;
-        return null;
-    }
-
-
-
 
     /**
      * medoo 操作
@@ -553,30 +506,58 @@ class Db
     }
 
     /**
-     * 执行 curd 操作
-     * @param String $method medoo method
-     * @param Bool $initCurd 是否重新初始化 curd，默认 true
-     * @return Mixed
-     */
-    public function __curdQuery($method, $initCurd=true)
-    {
-        if (!$this->curdInited()) return false;
-        $table = $this->curd["table"];
-        $field = $this->curd["field"];
-
-        $rst = $this->medoo($method, $table, $field);
-        if ($initCurd) $this->curdInit();
-        
-        return $rst;
-    }
-
-    /**
      * 判断 curd 是否已被 inited
      * @return Bool
      */
     public function curdInited()
     {
         return !empty($this->curd) && $this->curd instanceof Curd && $this->curd->db->key == $this->key;
+    }
+
+
+
+    /**
+     * api 操作
+     * 可以通过 URI 请求，执行 ***Api 方法
+     */
+
+    /**
+     * 执行任意 api 操作
+     * @param String $api 方法名，不含末尾 "Api"
+     * @param Array $args URI 参数
+     * @return Mixed
+     */
+    public function execApis($api, ...$args)
+    {
+        $m = $this->hasApi($api);
+        if ($m===false) {
+            trigger_error("orm::请求的 Api 不存在，Api = ".$this->name."/".$api, E_USER_ERROR);
+        }
+        return $this->$m(...$args);
+    }
+
+    /**
+     * 判断是否存在 api
+     * @param String $api 方法名，不含末尾 "Api"
+     * @return Mixed 存在则返回 完整的方法名，不存在 返回 false
+     */
+    public function hasApi($api)
+    {
+        $fn = lcfirst($api)."Api";
+        if (method_exists($this, $fn)) return $fn;
+        return false;
+    }
+
+    /**
+     * api
+     * 根据 json 预设，创建表 / 修改表字段结构
+     * @param String $model 数据模型(表) 名称
+     * @param Bool $keepRs 修改表字段结构时，是否保留现有数据记录，默认 true
+     * @return Bool
+     */
+    public function installApi($model = null, $keepRs = true)
+    {
+        return "install table from json";
     }
 
 
