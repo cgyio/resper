@@ -20,6 +20,7 @@ class App extends Resper
     public $intr = "";  //app说明，子类覆盖
     public $name = "";  //app名称，子类覆盖
     public $key = "";   //app调用路径
+    
 
     /**
      * 此 响应者类 是否需要 UAC 权限控制，
