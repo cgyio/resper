@@ -7,6 +7,7 @@
 namespace Cgy\util;
 
 use Cgy\Util;
+use Cgy\util\Conv;
 
 class Is extends Util 
 {
@@ -293,6 +294,56 @@ class Is extends Util
     {
         if (empty($var)) return false;
         return self::any($var, ...$types);
+    }
+
+    /**
+     * 判断两个变量是否相等
+     * @param Mixed $a
+     * @param Mixed $b
+     * @return Bool
+     */
+    public static function eq($a, $b)
+    {
+        if (is_null($a)) return is_null($b);
+        if (is_bool($a)) return $a ? $b==true : $b==false;
+        if (is_numeric($a)) {
+            if (!is_numeric($b)) return false;
+            $a = (string)$a;
+            $b = (string)$b;
+            return bccomp($a, $b) == 0;
+        }
+        if (is_string($a)) {
+            if (!is_string($b)) return false;
+            if (self::ntf($a)) return self::ntf($b) ? strtolower($a)==strtolower($b) : false;
+            if (self::json($a)) {
+                if (!self::json($b)) return false;
+                return self::eq(Conv::j2a($a), Conv::j2a($b));
+            }
+            return $a == $b;
+        }
+        if (is_array($a)) {
+            if (!is_array($b)) return false;
+            if (empty($a)) return empty($b);
+            if (self::indexed($a)) {
+                if (!self::indexed($b)) return false;
+                if (count($a)!=count($b)) return false;
+                return empty(array_diff($a, $b));
+            }
+            if (self::associate($a)) {
+                if (!self::associate($b)) return false;
+                $ksa = array_keys($a);
+                $ksb = array_keys($b);
+                if (!self::eq($ksa, $ksb)) return false;
+                foreach ($ksa as $k) {
+                    if (!self::eq($a[$k], $b[$k])) return false;
+                }
+                return true;
+            }
+            return $a == $b;
+        }
+        if (empty($a)) return empty($b);
+
+        return $a === $b;
     }
 
     /**

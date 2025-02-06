@@ -137,7 +137,7 @@ class Model extends Record
      * @param Array $data 数据表记录内容，通常由 curd 操作返回
      * @return Model 一条数据记录实例
      */
-    public static function create($data=[])
+    public static function create($data = [])
     {
         $rs = new static($data);
         return $rs;
@@ -145,16 +145,14 @@ class Model extends Record
 
     /**
      * 创建一条新记录，但不写入数据库
-     * @param Array $data 记录初始值
+     * @param Array $data 新记录初始数据
      * @return Model 实例
      */
-    public static function new($data=[])
+    public static function new($data = [])
     {
-        if (!empty($data)) {
-            $dft = static::$config->default;
-            $data = arr_extend($dft, $data);
-        }
-        $rs = new static($data);
+        $idf = static::idf();
+        if (isset($data[$idf])) unset($data[$idf]);
+        $rs = static::create($data);
         $rs->isNew = true;
         return $rs;
     }
@@ -405,6 +403,23 @@ class Model extends Record
     public static function deleteApi(...$args)
     {
         
+    }
+
+    /**
+     * api
+     * @role all
+     * @desc 获取数据表中全部记录
+     * @param Array $args 
+     * @return Array 记录集
+     */
+    public static function allApi(...$args)
+    {
+        $db = static::$db;
+        $conf = static::$config;
+        $mdn = $conf->name;
+        $tbn = $conf->table;
+        $rst = $db->medoo("select", $tbn);
+
     }
 
 

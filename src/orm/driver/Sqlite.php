@@ -164,6 +164,40 @@ class Sqlite extends Driver
 
 
     /**
+     * 实例方法
+     */
+
+    /**
+     * 获取库中所有表 数组
+     * @return Array [ 表名, ... ]
+     */
+    public function getTableNames()
+    {
+        $rs = $this->medoo(
+            "query", 
+            "SELECT `name` FROM `sqlite_master` WHERE `type`='table' ORDER BY `name`"
+        )->fetchAll();
+        $tbs = array_map(function($i) {
+            if (Is::nemstr($i)) {
+                $tbn = $i;
+            } else if (Is::nemarr($i)) {
+                $tbn = $i["name"];
+            } else {
+                $tbn = "";
+            }
+            return $tbn;
+        }, $rs);
+        $tbs = array_filter($tbs, function($i) {
+            if (!Is::nemstr($i)) return false;
+            if (strpos($i, "sqlite")!==false) return false;
+            return true;
+        });
+        return array_values($tbs);
+    }
+
+
+
+    /**
      * tools
      */
 

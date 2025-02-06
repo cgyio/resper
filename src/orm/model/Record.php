@@ -83,14 +83,15 @@ class Record
      */
     protected function initInsData($data=[])
     {
-        //如果未传入 初始 data 则视为新建记录，初始 data = 默认值 default
-        if (empty($data)) {
-            $data = static::$config->default;
+        //如果未传入 初始 data 或传入的 data 不包含 idf 字段值 则视为新建记录，初始 data = 默认值 default
+        $idf = static::idf();
+        if (empty($data) || !isset($data[$idf])) {
             //标记为 新建(未保存)记录
             $this->isNew = true;
+            $dft = static::$config->default;
+            $data = Arr::extend($dft, $data);
+            //if (empty($data)) $data = static::$config->default;
         }
-
-        //var_dump(array_keys($data));
         
         //从 data 中分离出 join 关联表返回的数据
         $jtbs = static::$config->join["tables"] ?? [];
@@ -113,8 +114,6 @@ class Record
             }
         }
 
-        //var_dump(array_keys($cdata));
-
         //当前主表数据写入 context
         $this->context = $cdata;
         //写入主表初始数据 origin
@@ -133,6 +132,7 @@ class Record
     }
 
     /**
+     * 构造
      * 依次执行 可能存在的 initInsFooBar()
      * 通常由 实现各种数据操作功能的 traits 引入
      * @return Model $this
@@ -169,6 +169,49 @@ class Record
     {
         //... 子类实现
         return $this;
+    }
+
+    /**
+     * 记录写入数据
+     * @return Model $this
+     */
+    public function save()
+    {
+        $diff = $this->diff();
+        if (empty($diff)) return $this;
+        
+    }
+
+    /**
+     * 判断哪些字段值被修改了
+     * @return Array $data 被修改的字段值，用于写入数据库
+     */
+    protected function diff()
+    {
+        $idf = static::idf();
+        $ctx = $this->context;
+
+        //新建记录的 直接返回 context
+        if ($this->isNew) {
+            if (isset($ctx[$idf])) {
+                unset($ctx[$idf]);
+            }
+            return $ctx;
+        }
+
+        $conf = static::$config;
+        $cols = $conf->columns;
+        $origin = $this->origin;
+        $diff = [];
+        foreach ($cols as $col) {
+            if ($col==$idf) continue;
+            $ctxi = !isset($ctx[$col]) ? null : $ctx[$col];
+            $orgi = !isset($origin[$col]) ? null : $origin[$col];
+            if (!Is::eq($ctxi, $orgi)) {
+                $diff[$col] = $ctxi;
+            }
+        }
+        return $diff;
     }
     
 
@@ -239,6 +282,15 @@ class Record
             return static::$config;
         }
 
+        /**
+         * $rs->curd 
+         * 相当于 $db->Model->curd
+         * $db->currentModel 指向当前 数据表，返回 $db->curd 实例
+         */
+        if (strtolower($key) == "curd") {
+            return $this->Model->curd;
+        }
+
         return null;
     }
 
@@ -279,6 +331,23 @@ class Record
                 }
             }
         }
+
+        /**
+         * $rs->curdFunc()
+         * $rs->where(...)->order(...)->select()  -->  $db->Foobar->where(...)->...
+         */
+        $curd = $this->curd;
+        if (
+            method_exists($curd, $method) ||
+            $curd->hasWhereMethod($method) === true ||
+            $curd->hasMedooMethod($method) === true
+        
+        ) {
+            $db = static::$db;
+            $mdn = ucfirst(static::$config->name);
+            return $db->$mdn->$method(...$args);
+        }
+
 
         return null;
     }

@@ -270,7 +270,23 @@ class Db
         $dbn = $this->name;
         $mdcls = $this->resper->cls("model/".$dbn."/".ucfirst($mdn));
         if (empty($mdcls)) return false;
+        //在数据库中查找是否实际存在表
+        if (!$this->hasTable($model)) return false;
         return $mdcls;
+    }
+
+    /**
+     * 判断 数据模型(表) 是否在库中真实存在
+     * @param String $model 表(模型)名称 如：Usr
+     * @return Bool
+     */
+    public function hasTable($model)
+    {
+        $tables = $this->getTableNames();
+        if (in_array($model, $tables)) return true;
+        $tbn = lcfirst($model);
+        if (in_array($tbn, $tables)) return true;
+        return false;
     }
 
     /**
@@ -552,12 +568,77 @@ class Db
      * api
      * 根据 json 预设，创建表 / 修改表字段结构
      * @param String $model 数据模型(表) 名称
-     * @param Bool $keepRs 修改表字段结构时，是否保留现有数据记录，默认 true
      * @return Bool
      */
-    public function installApi($model = null, $keepRs = true)
+    public function installApi($model = null)
     {
-        return "install table from json";
+        if (!Is::nemstr($model)) return false;
+
+        //获取原记录集
+        $tbn = lcfirst($model);
+        $has = $this->hasTable($tbn);
+        if ($has===false) {
+            $ors = [];
+        } else {
+            $ors = $this->medoo("select", $tbn, "*");
+            //return $ors;
+        }
+
+        //从其他数据库获取原记录
+        $dbase = new Medoo([
+            "type" => "sqlite",
+            "database" => "/www/cgydev.work/app/index/library/db/usr.db"
+        ]);
+        $ors = $dbase->select($tbn, "*");
+        //return $ors;
+
+        //删除原表
+        if ($has!==false) {
+            $this->medoo("drop", $tbn);
+        }
+
+        //创建新表
+        $creation = $this->config->ctx("model/$tbn/creation");
+        //return $creation;
+        $sql = [];
+        foreach ($creation as $col => $csql) {
+            $sql[] = "`$col` $csql";
+        }
+        $sql = implode(", ", $sql);
+        $sql = "CREATE TABLE IF NOT EXISTS `$tbn` ($sql)";
+        //return $sql;
+        $this->medoo("query", $sql);
+
+        //写入原记录
+        if (!empty($ors)) {
+            //使用事务
+            $this->medoo("action", function($db) use ($ors, $tbn, $creation) {
+                for ($i=0;$i<count($ors);$i++) {
+                    $rsi = $ors[$i];
+                    $vi = [];
+                    foreach ($rsi as $col => $val) {
+                        if (!isset($creation[$col])) continue;
+                        if (is_null($val)) {
+                            $vi[$col] = "";
+                        } else if (is_numeric($val)) {
+                            $vi[$col] = $val;
+                        } else {
+                            $vi[$col] = "'$val'";
+                        }
+                    }
+                    $db->insert($tbn, $vi);
+                }
+            });
+        }
+
+        //返回新建表 参数 以及 记录
+        $model = $this->model($model);
+        $nrs = $this->medoo("select", $tbn, "*");
+        return [
+            "success" => true,
+            "model" => empty($model) ? "No Class File ".ucfirst($model).EXT : $model::$config->context,
+            "rs" => $nrs
+        ];
     }
 
 

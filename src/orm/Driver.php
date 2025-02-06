@@ -58,4 +58,21 @@ class Driver extends Db
 
         return true;
     }
+
+
+
+    /**
+     * 实例方法
+     */
+
+    /**
+     * 获取库中所有表 数组
+     * @return Array [ 表名, ... ]
+     */
+    public function getTableNames()
+    {
+        //... 子类实现
+
+        return [];
+    }
 }
