@@ -211,11 +211,11 @@ class Response
     public function setFormat($format = null)
     {
         $req = $this->request;
-        if ($req->debug) {
+        /*if ($req->debug) {
             //如果 WEB_DEBUG == true
             $this->format = "dump";
             return $this->setExporter();
-        }
+        }*/
 
         if ($req->ajax->true) {
             //AJAX 调用 默认输出 json

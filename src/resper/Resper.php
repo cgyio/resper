@@ -236,7 +236,7 @@ class Resper extends ResperBase
         if (self::$resper instanceof $scls) return self::$resper;
 
         $params = self::seek();
-        var_dump($params);
+        //var_dump($params);
         self::$params = $params;
         $resperCls = $params["resper"];
         $resper = new $resperCls();

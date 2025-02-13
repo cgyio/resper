@@ -1,0 +1,74 @@
+
+/** btn **/
+/** 生成 img url，返回 url(...) 属性值 **/
+@function resper-imgurl($icon: md-sharp-home, $fill: '') {
+    @if $fill != '' {
+        @if str-index($fill, '#') != null {
+            //去除颜色 Hex 中的 #
+            $fill: str-slice($fill, 2);
+        }   
+        $icon: #{$icon} + '?fill=' + #{$fill};
+    }
+    @return url('https://io.cgy.design/icon/#{$icon}');
+}
+/** 根据输入的 icon 尺寸，计算 img 尺寸，返回 px **/
+@function resper-imgsize($size: m) {
+    @if $size == m {
+        $sz: map-get($sizeMap, btn-icon);
+    } @else {
+        $sz: map-get($sizeMap, btn-icon-#{$size});
+    }
+    @return $sz;
+}
+/** 可选的 icon map **/
+$resperIconList: home,back,reload;
+$resperIconMap: (
+    home: md-sharp-home,
+    back: md-sharp-arrow-back,
+    reload: md-sharp-refresh
+);
+
+.resper-btn {
+    $btn-sz: map-get($sizeMap, btn);
+    @include po-ov($w: $btn-sz, $h: $btn-sz);
+    border: none; outline: none;
+    border-radius: $size-gap-xs;
+    cursor: pointer;
+    @include trans;
+
+    $img-sz: resper-imgsize();
+    background: {
+        repeat: no-repeat;
+        position: center;
+        size: $img-sz;
+    }
+    @each $bsz in $sizeShiftQueue {
+        $btn-sz: map-get($sizeMap, btn-#{$bsz});
+        @if $btn-sz != null {
+            &.btn-#{$bsz} {
+                $img-sz: resper-imgsize($bsz);
+                width: $btn-sz; height: $btn-sz;
+                background-size: $img-sz;
+            }
+        }
+    }
+
+    @each $btn in $resperIconList {
+        &.btn-#{$btn} {
+            $icon: map-get($resperIconMap, $btn);
+            @each $c in $colorListAlias {
+                $fill: map-get($colorMap, $c);
+                $imgurl: resper-imgurl($icon, $fill);
+                $imgurl-hov: resper-imgurl($icon, #ffffff);
+                &.btn-#{$c} {
+                    background-image: $imgurl;
+                    background-color: transparent;
+                    &:hover {
+                        background-image: $imgurl-hov;
+                        background-color: $fill;
+                    }
+                }
+            }
+        }
+    }
+}

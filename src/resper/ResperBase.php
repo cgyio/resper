@@ -9,6 +9,7 @@ namespace Cgy;
 
 //use Cgy\Resper;
 //use Cgy\resper\Seeker;
+use Cgy\App;
 use Cgy\Response;
 use Cgy\util\Is;
 use Cgy\util\Arr;
@@ -57,15 +58,16 @@ class ResperBase
      */
     public function default(...$args)
     {
-        Response::dump($this->path);
-        //trigger_error("php::这是错误说明，可以很长很长，for English path/foo/bar，Responder->path == ".$this->path, E_USER_ERROR);
-        //Resper::foo();
-        //Response::code(500);
-
-        //return [
-        //    "foo" => "bar",
-        //    "tom" => "jaz"
-        //];
+        trigger_error("custom::error test", E_USER_ERROR);
+        exit;
+        //默认方法 返回未找到 Resper 实例的预设页面
+        $pg = RESPER_PATH.DS."page".DS."not-found.php";
+        if (file_exists($pg)) {
+            Response::page($pg, [
+                "resper" => $this
+            ]);
+        }
+        Response::code(404);
     }
 
     /**
@@ -75,8 +77,18 @@ class ResperBase
      */
     public function empty()
     {
-        var_export("Empty Respond Class");
-        exit;
+        //URI 为空时执行
+        if ($this->type == "App") {
+            //如果响应者是 App 则查找路径下 page/index.php
+            $pg = $this->path("page/index.php");
+            if (file_exists($pg)) {
+                Response::page($pg, [
+                    "resper" => $this
+                ]);
+            }
+        }
+
+        Response::code(404);
     }
 
     /**
@@ -105,6 +117,7 @@ class ResperBase
         var_export("Respond Error");
         exit;
     }
+
 
     
 }

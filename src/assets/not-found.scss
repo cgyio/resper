@@ -1,0 +1,51 @@
+
+body {
+    width: 100vw; height: 100vh; margin: 0; padding: 64px 0 96px 0; overflow: hidden;
+    display: flex; flex-direction: column; 
+    align-items: center; justify-content: center;
+    box-sizing: border-box;
+    font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft Yahei",Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji";
+    font-size: 14px;
+}
+.title {
+    font-size: 48px;
+    font-weight: 100;
+    color: $color-dark-d3;
+}
+.sign {
+    width: 100vw; overflow: hidden;
+    flex: 1;
+    background: {
+        repeat: no-repeat;
+        size: auto 60vh;
+        position: center; 
+        color: $color-white;
+    }
+    &.not-found {
+        background-image: url('https://io.cgy.design/icon/sign-%E6%9A%82%E6%97%A0%E5%86%85%E5%AE%B9');
+    }
+    &.error {
+        background-image: url('https://io.cgy.design/icon/sign-%E7%A6%81%E6%AD%A2%E8%AE%BF%E9%97%AE');
+    }
+}
+.cpr {
+    width: 100%;
+    display: flex; align-items: center; justify-content: center;
+    color: $color-dark;
+}
+.cdlogo {
+    height: 36px; width: auto;
+}
+.cpr-a {
+    width: 128px; height: 36px; overflow: hidden;
+    margin: 0 0 24px 0; padding: 0; box-sizing: border-box;
+    display: flex; align-items: center; justify-content: center;
+    background-color: $color-blue;
+    color: #fff;
+    border-radius: 8px;
+    text-decoration: none;
+    transition: all .3s;
+}
+.cpr-a:hover {background-color: $color-blue-l1;}
+.gap-r {margin-right: 16px;}
+.gap-b {margin-bottom: 24px;}

@@ -1,11 +1,13 @@
 <?php
-/*
- *  Attobox Framework / cURL toolkit
- *  
+/**
+ * cgyio/resper cURL toolkit
  */
 
-namespace Atto\Box\request;
+namespace Cgy\request;
 
+use Cgy\request\Url;
+use Cgy\util\Is;
+use Cgy\util\Arr;
 
 class Curl
 {
@@ -55,15 +57,15 @@ class Curl
     ) {
         $this->curl = curl_init();
         $this->url = Url::mk($url);
-        $opt = is_notempty_arr($opt) ? $opt : [];
+        $opt = Is::nemarr($opt) ? $opt : [];
         //$opts = Vars::Arr(["url" => $this->url->val()]);
-        $opts = arr_extend([
+        $opts = Arr::extend([
             "url" => $this->url->full
         ], self::$usefor["default"]);
         if (strtolower($this->url->protocol) == "https") {
-            $opts = arr_extend($opts, self::$usefor["ssl"]);
+            $opts = Arr::extend($opts, self::$usefor["ssl"]);
         }
-        if (!empty($opt)) $opts = arr_extend($opts, $opt);
+        if (!empty($opt)) $opts = Arr::extend($opts, $opt);
         $this->options = $opts;
         $this->setOpt($this->options);
     }
@@ -79,13 +81,13 @@ class Curl
     //setOpt
     public function setOpt($key, $val = null)
     {
-        if (is_notempty_str($key)) {
+        if (Is::nemstr($key)) {
             $cnst = "CURLOPT_" . strtoupper($key);
             if (defined($cnst)) {
                 //var_dump($cnst);
                 curl_setopt($this->curl, constant($cnst), $val);
             }
-        } else if (is_associate($key)) {
+        } else if (Is::associate($key)) {
             foreach ($key as $k => $v) {
                 $this->setopt($k, $v);
             }
@@ -108,11 +110,11 @@ class Curl
             $usefor = self::$usefor;
             foreach ($args as $k => $v) {
             //$args->each(function($v, $k) use (&$opts, $usefor) {
-                if (is_notempty_str($v)) {
+                if (Is::nemstr($v)) {
                     if (isset($usefor[$v])) {
-                        $opts = arr_extend($opts, $usefor[$v]);
+                        $opts = Arr::extend($opts, $usefor[$v]);
                     }
-                } elseif (is_indexed($v)) {
+                } elseif (Is::indexed($v)) {
                     //$v = Vars::Arr($v);
                     $vkey = array_shift($v);
                     if (isset($usefor[$vkey])) {
@@ -129,7 +131,7 @@ class Curl
                             //return $vv;
                         //});
                         }
-                        $opts = arr_extend($opts, $vopt);
+                        $opts = Arr::extend($opts, $vopt);
                     }
                 }
             //});
