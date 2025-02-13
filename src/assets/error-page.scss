@@ -15,12 +15,12 @@ body {
     @include po-ov($w: 80vw, $h: auto, $mg: 15vh 0 0 0, $pd: #{$size-gap-xl});
     max-width: 720px;
     @include flex-y;
-    border: $color-danger-l2 solid 1px; border-radius: $size-gap;
+    border: none; border-radius: $size-gap;
     background-color: $color-bg-l3;
     @include trans;
 
     &:hover {
-        border-color: $color-danger;
+        border: $color-danger solid 1px;
         @include shadow;
     }
 
