@@ -55,9 +55,7 @@
             class="cgy-btn btn-vant-arrowleft btn-primary btn-pop mg-r-xs" 
             title="返回上一页" 
             onclick="goBack()"
-        >
-            <span class="btn-label">返回</span>
-        </button>
+        ></button>
         <button 
             class="cgy-btn btn-vant-sync btn-primary btn-pop mg-r-xs" 
             title="刷新页面" 

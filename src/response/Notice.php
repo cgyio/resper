@@ -73,9 +73,9 @@ class Notice
     {
         if ($this->type!="error" && empty($error)) return $this;
         if (is_array($error)) $error = (object)$error;
+        $this->title = $error->title;
+        $this->msg = $error->msg;
         $this->params = Arr::extend($this->params, [
-            "title" => $error->title,
-            "msg" => $error->msg,
             "file" => $error->file,
             "line" => $error->line
         ]);
