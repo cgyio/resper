@@ -9,6 +9,7 @@ namespace Cgy\response\exporter;
 use Cgy\Resper;
 use Cgy\Response;
 use Cgy\response\Exporter;
+use Cgy\response\Notice;
 use Cgy\util\Is;
 use Cgy\util\Str;
 use Cgy\util\Conv;
@@ -28,20 +29,35 @@ class Html extends Exporter
         if (!empty($d) && isset($d["type"]) && $d["type"]=="Error") {
             //输出错误提示
             $error = $d;
-            //调用 系统错误页面，在这些路径中查找 $epn.php 中查找
-            $pgps = [];
-            $epn = EXPORT_ERRPAGE.EXT;
-            $rdp = Resper::$resper->path;
-            $pgps[] = $rdp."/".$epn;
-            $pgps[] = $rdp."/error"."/".$epn;
-            $pgps[] = "root/".$epn;
-            $pgps[] = "root/error/".$epn;
-            $pgps[] = "resper/error/".$epn;
-            $errpage = Path::exists($pgps,[
-                "inDir" => "page"
-            ]);
+            if (EXPORT_ERRPAGE!="") {
+                //调用预定义的错误页面 EXPORT_ERRPAGE
+                $pgps = [];
+                $epn = EXPORT_ERRPAGE.EXT;
+                $rdp = Resper::$resper->path;
+                $pgps[] = $rdp."/".$epn;
+                $pgps[] = $rdp."/error"."/".$epn;
+                $pgps[] = "root/".$epn;
+                $pgps[] = "root/error/".$epn;
+                $pgps[] = "resper/error/".$epn;
+                $errpage = Path::exists($pgps,[
+                    "inDir" => "page"
+                ]);
+                if (file_exists($errpage)) {
+                    $_Response = $this->response;
+                    require($errpage);
+                    //从 输出缓冲区 中获取内容
+                    $this->content = ob_get_contents();
+                    //清空缓冲区
+                    ob_clean();
+                    return $this;
+                }
+            }
+            //调用 Notice 输出类
+            $notice = new Notice("error");
+            $notice->setError($error);
+            $this->content = $notice->html();
 
-            if (empty($errpage) || !file_exists($errpage)) {
+            /*if (empty($errpage) || !file_exists($errpage)) {
                 $this->content = Str::tpl($this->errHtml, $error);
             } else {
                 $_Response = $this->response;
@@ -50,7 +66,7 @@ class Html extends Exporter
                 $this->content = ob_get_contents();
                 //清空缓冲区
                 ob_clean();
-            }
+            }*/
         } else {
             if (empty($d)) {
                 $this->content = "";

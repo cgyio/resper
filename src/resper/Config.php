@@ -61,7 +61,8 @@ class Config extends Configer
             "ajax"      => "json",
             "lang"      => "zh-CN",     //输出语言
             "psr7"      => false,		//是否允许以Psr-7标准返回响应
-            "errpage"   => "errorPage", //错误页面名称
+            "errpage"   => "",          //错误页面名称
+            "pausepage" => "",          //WEB_PAUSE 显示的页面名称
         ],
 
         /**

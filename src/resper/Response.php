@@ -85,19 +85,22 @@ class Response
         //创建响应头
         $this->header = new Header();
         //是否暂停响应
-        $this->paused = $this->request->pause && !$this->resper->unpause;
+        //$this->paused = $this->request->pause && !$this->resper->unpause;
+        $this->paused = $this->resper->responsePaused();
         //是否允许以 PSR-7 标准输出
         $this->psr7 = EXPORT_PSR7;
 
         /**
          * 暂停响应
+         * !!! 此逻辑应在 response 实例化后执行，而不能在实例化过程中执行
+         * !!! 因此，此段代码被转移到 Resper->response() 方法中
          */
-        if ($this->paused) {
+        /*if ($this->paused) {
             $this->setFormat("pause");
             //直接输出
             $this->export();
             exit;
-        }
+        }*/
         
         /**
          * 初始化 response 参数

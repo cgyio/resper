@@ -708,6 +708,16 @@ class Resper extends ResperBase
         //创建 Response 实例
         $response = Response::current();
 
+        /**
+         * 暂停响应
+         */
+        if ($response->paused) {
+            $response->setFormat("pause");
+            //直接输出
+            $response->export();
+            exit;
+        }
+
         //检查 Resper::$config 是否包含了 response 额外参数
         $conf = $this->conf;
         $resps = $conf["response"] ?? [];

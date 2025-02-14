@@ -40,9 +40,34 @@ class ResperBase
     /**
      * 此 响应者 是否不受 WEB_PAUSE 设置影响
      * !! 子类覆盖
+     * == false 默认，WEB_PAUSE==true 时 阻止响应
      * == true 则 WEB_PAUSE==true 时，此响应者依然可以响应 request 并输出结果
+     * == [ "method", "method", ... ] 这些指定的响应方法，不受 WEB_PAUSE 控制
+     * == [ "__except__", "method", "method", ... ] 除了这些指定的方法外，其他方法不受 WEB_PAUSE 控制
      */
     public $unpause = false;
+
+    /**
+     * 根据 WEB_PAUSE 检查响应方法是否被终止
+     * @return Bool
+     */
+    public function responsePaused()
+    {
+        $webPause = $this::$request->pause;
+        if (!$webPause) return false;
+        $unpause = $this->unpause;
+        if (is_bool($unpause)) return !$unpause;
+        if (is_array($unpause)) {
+            if (empty($unpause)) return true;
+            //第一项为 __except__ 则只有指定的方法被 pause
+            $except = $unpause[0] === "__except__";
+            $ps = $this->ctx;
+            $m = $ps["method"] ?? null;
+            $inups = in_array($m, $unpause);
+            return $except ? $inups : !$inups;
+        }
+        return true;
+    }
 
     
 
