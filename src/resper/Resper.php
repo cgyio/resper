@@ -81,7 +81,8 @@ class Resper extends ResperBase
         self::$config->initConf();
 
         //应用 errorHandler 自定义错误处理
-        Error::setHandler();
+        //Error::setHandler();
+        Error::regist();
 
         /**
          * 开始 request / response 请求与响应 流程
@@ -213,8 +214,8 @@ class Resper extends ResperBase
                 $model_ds = array_map(function($i) {
                     return ROOT_PATH.DS.str_replace("/",DS,trim($i));
                 }, DIR_MODEL);
-                $alo->addPsr4($ns.'\\Web\\', $lib_ds);
-                $alo->addPsr4($ns.'\\Web\\model\\', $model_ds);
+                //$alo->addPsr4($ns.'\\', $lib_ds);
+                $alo->addPsr4($ns.'\\model\\', $model_ds);
 
             }
         }
@@ -454,7 +455,9 @@ class Resper extends ResperBase
          * 根据 resper 响应者预设参数 初始化：
          */
         //初始化 orm
-        $this->initOrm();
+        //$this->initOrm();
+        //实例化 Orm 类
+        $this->orm = Orm::current($this);
 
         //自定义初始化动作
         return $this->init();
@@ -468,6 +471,8 @@ class Resper extends ResperBase
      */
     private function initOrm()
     {
+
+
         $conf = $this->conf;
         $ormc = $conf["orm"] ?? [];
         if (!Is::nemarr($ormc)) return $this;
@@ -485,11 +490,21 @@ class Resper extends ResperBase
             $dirs = $ormc["dirs"] ?? DIR_DB;
             if (Is::nemstr($dirs)) $dirs = explode(",", trim($dirs, ","));
             $dbps = array_map(function($i) {
+                $ia = explode("/", trim($i, "/"));
+                if (defined(strtoupper($ia[0])."_PATH")) {
+                    //var_dump(Path::cnst($ia[0]));
+                    $ip = Path::find($i, ["checkDir"=>true]);
+                    if (!empty($ip)) {
+                        //var_dump($ip);
+                        return $ip;
+                    }
+                }
                 return $this->path($i, false);
             }, $dirs);
             $dbp = Path::exists($dbps, ["checkDir"=>true]);
+            //var_dump($dbp);
             if (!empty($dbp)) {
-                $ormc["path"] = $dbp;
+                $ormc["path"] = Path::fix($dbp);
                 //查询数据库列表
                 $dbns = [];
                 $dbph = @opendir($dbp);
@@ -509,6 +524,40 @@ class Resper extends ResperBase
             //TODO: 采用其他类型数据库
             //...
         }
+
+        //处理模型类文件路径
+        $mdps = $ormc["models"] ?? DIR_MODEL;
+        $mdps = Is::nemstr($mdps) ? explode(",", $mdps) : $mdps;
+        if (!Is::nemarr($mdps) || !Is::indexed($mdps)) $mdps = explode(",", DIR_MODEL);
+        $mbps = array_map(function($i) {
+            $ia = explode("/", trim($i, "/"));
+            if (defined(strtoupper($ia[0])."_PATH")) {
+                //var_dump(Path::cnst($ia[0]));
+                $ip = Path::find($i, ["checkDir"=>true]);
+                if (!empty($ip)) {
+                    //var_dump($ip);
+                    return $ip;
+                }
+            }
+            return $this->path($i, false);
+        }, $mdps);
+        $mbp = Path::exists($mbps, ["checkDir"=>true]);
+        var_dump($mdp);
+        $ormc["model"] = [
+            "path" => "",
+            "clsp" => "",    //类全称前缀
+        ];
+        if (!empty($mdp)) {
+            $ormc["model"]["path"] = Path::fix($mdp);
+        } else {
+            //默认模型文件路径，在当前响应者路径 model 文件夹下
+            $ormc["model"]["path"] = $this->path.DS."model";
+        }
+        //取得模型类全称 前缀
+        $mdp = $ormc["model"]["path"];
+        $mdclsp = str_replace(ROOT_PATH.DS, NS, $mdp);
+        $mdclsp = str_replace(DS, "\\", $mdclsp)."\\";
+        $ormc["model"]["clsp"] = $mdclsp;
 
         //将 orm 参数写入 Resper::$config->context
         $opt = [];
@@ -554,6 +603,19 @@ class Resper extends ResperBase
     public function path($path = "", $params = null)
     {
         /**
+         * 处理传入的 params 参数
+         * 传入 Path::find() 第二参数
+         */
+        $dfp = ["inDir" => DIR_ASSET];
+        if (Is::nemarr($params) && Is::associate($params)) {
+            $params = Arr::extend($dfp, $params);
+        } else if ($params!==false) {
+            $params = $dfp;
+        } else {
+            $params = false;
+        }
+
+        /**
          * 如果 $path 已存在
          */
         if (file_exists($path)) return $path;
@@ -577,15 +639,7 @@ class Resper extends ResperBase
         //路径前缀
         $pre = $this->path;
 
-        //传入 Path::find() 第二参数
-        $dfp = ["inDir" => DIR_ASSET];
-        if (Is::nemarr($params) && Is::associate($params)) {
-            $params = Arr::extend($dfp, $params);
-        } else if ($params!==false) {
-            $params = $dfp;
-        } else {
-            $params = false;
-        }
+        
         if ($params===false) {
             //直接输出 真实的 resper 所在路径
             if ($rtp == "App") {

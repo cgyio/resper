@@ -220,6 +220,16 @@ class Error
 		//create error instance
 		$err = self::create($errno, $errfile, $errline, $cls[0], $cls[1], $msg);
         if (!is_null($err) && $err instanceof Error) {
+			
+			if (Is::nemstr($errstr) && false!==strpos($errstr, "::") && $err->title=="Undefined") {
+				//自定义错误标题：标题::信息
+				$earr = explode("::", $errstr);
+				$err->title = $earr[0];
+				$err->msg = $earr[1] ?? "No Error Message";
+				$err->code = "custom";
+				$err->setData();
+			}
+
             if ($err->mustThrow()) {
                 Response::current()->throwError($err);
                 //var_dump("throw error");
@@ -238,26 +248,56 @@ class Error
 	 */
 	public static function fatalHandler() 
 	{
+		//error_reporting(0);
 		$err_last = error_get_last();
-		var_dump($err_last);
-		$cls = [ Cls::find("error/base"), "fatal" ];
-		$file = $err_last["file"];
-		$line = $err_last["line"];
-		$msg = $err_last["message"];
-		$err = self::create(9999, $file, $line, $cls[0], $cls[1], $msg);
-		//var_dump($err);
-		if (!is_null($err) && $err instanceof Error) {
-            if ($err->mustThrow()) {
-				//var_dump(Response::current());
-                Response::current()->throwError($err);
-                //var_dump("throw error");
-                //var_dump($err);
-            } else {
-                Response::current()->setError($err);
-                //var_dump("set error");
-                //var_dump($err);
-            }
-        }
+		if (!empty($err_last)) {
+			//var_dump($err_last);
+			$type = $err_last["type"] ?? null;
+			//var_dump($type);
+			if (!empty($type) && $type == 1) {
+				//fatal error
+				$cls = [ Cls::find("error/base"), "fatal" ];
+				$file = $err_last["file"] ?? "";
+				$line = $err_last["line"] ?? "";
+				$msg = $err_last["message"] ?? "";
+				//var_dump($msg);
+				$msga = explode("\n", $msg);
+				//var_dump($msga);
+				array_pop($msga);
+				$pmsg = array_shift($msga);
+				$pmsga = explode(" in ", $pmsg);
+				array_pop($pmsga);
+				$pmsg = implode(" in ", $pmsga);
+				$msgh = [];
+				$msgh[] = '<h3>'.$pmsg.'</h3>';
+				$msgh[] = '<ul><li>';
+				$msgh[] = implode('</li><li>', $msga);
+				$msgh[] = '</li>';
+				$msgh = implode("", $msgh);
+
+				$err = self::create(9999, $file, $line, $cls[0], $cls[1], [$msgh]);
+				//var_dump($err);
+				if (!is_null($err) && $err instanceof Error) {
+					if ($err->mustThrow()) {
+						Response::current()->throwError($err);
+					} else {
+						Response::current()->setError($err);
+					}
+				}
+			}
+		}
+	}
+
+	/**
+	 * 注册 自定义错误处理
+	 * set_error_handler() 处理普通错误
+	 * register_shutdown_function() 处理致命错误
+	 */
+	public static function regist()
+	{
+		set_error_handler([static::class, "handler"]);
+		//注册一个 在 exit() 后执行的方法，此方法中获取最后一个错误，如果是 fatal error 则抛出
+		register_shutdown_function([static::class, "fatalHandler"]);
 	}
 
 	//注册 set_error_handler

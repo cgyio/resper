@@ -4,9 +4,12 @@
  * excel 文件处理
  */
 
-namespace Atto\Box\resource;
+namespace Cgy\module\resource;
 
-use Atto\Box\Resource;
+use Cgy\module\Resource;
+use Cgy\util\Arr;
+use Cgy\util\Is;
+
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 
@@ -80,25 +83,25 @@ class Excel extends Resource
         if (isset($params["content"])) {    //通过直接输入内容，创建纯文本文件
             $content = $params["content"];
             unset($params["content"]);
-            $params = is_notempty_arr($params) ? $params : [];
-            if (!empty($_GET)) $params = arr_extend($_GET, $params);
+            $params = Is::nemarr($params) ? $params : [];
+            if (!empty($_GET)) $params = Arr::extend($_GET, $params);
             if (strpos($path, ".")===false) $path .= ".txt";
             $p = [
                 "rawPath"   => $path,
-                "rawExt"    => Mime::ext($path),
+                "rawExt"    => Mime::getExt($path),
                 "resType"   => 'create',
                 "realPath"  => '',
                 "params"    => $params,
                 "content"   => $content
             ];
         } else {
-            if (is_indexed($path)) $path = implode(DS, $path);
+            if (Is::indexed($path)) $path = implode(DS, $path);
             $p = self::parse($path);
             if (is_null($p)) return null;
-            $params = is_notempty_arr($params) ? $params : [];
-            if (!empty($_GET)) $params = arr_extend($_GET, $params);
+            $params = Is::nemarr($params) ? $params : [];
+            if (!empty($_GET)) $params = Arr::extend($_GET, $params);
             if (!isset($p["params"]) || !is_array($p["params"])) $p["params"] = [];
-            $p["params"] = arr_extend($p["params"], $params);
+            $p["params"] = Arr::extend($p["params"], $params);
         }
         $res = new Excel($p);
         return $res;

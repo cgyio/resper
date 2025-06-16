@@ -67,6 +67,7 @@ class Src extends Resper
         //查找资源 创建 Resource 实例
         $resource = Resource::create($path);
         //var_dump($resource);
+        //exit;
         if ($resource instanceof Resource) {
             return $resource->export();
         }

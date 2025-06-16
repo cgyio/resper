@@ -5,6 +5,9 @@
 
 namespace Cgy\module;
 
+use Cgy\util\Is;
+use Cgy\util\Arr;
+
 class Configer 
 {
     /**
@@ -42,12 +45,12 @@ class Configer
     public function setConf($opt = [])
     {
         //保存用户设置原始值
-        $this->opt = cgy_arr_extend($this->opt, $opt);
+        $this->opt = Arr::extend($this->opt, $opt);
 
         //合并 用户设置 与 默认参数，保存到 context
         $ctx = $this->context;
-        if (empty($ctx)) $ctx = cgy_arr_copy($this->init);
-        $ctx = cgy_arr_extend($ctx, $opt);
+        if (empty($ctx)) $ctx = Arr::copy($this->init);
+        $ctx = Arr::extend($ctx, $opt);
 
         //处理设置值，支持格式：String, IndexedArray, Numeric, Bool, null,
         $this->context = $this->fixConfVal($ctx);
@@ -81,7 +84,7 @@ class Configer
          */
         if (isset($this->context[$key])) {
             $ctx = $this->context[$key];
-            //if (cgy_is_associate($ctx)) return (object)$ctx;
+            //if (Is::associate($ctx)) return (object)$ctx;
             return $ctx;
         }
 
@@ -103,10 +106,10 @@ class Configer
     public function ctx($key = "")
     {
         if ($key=="") return $this->context;
-        if (!cgy_is_nemstr($key)) return null;
+        if (!Is::nemstr($key)) return null;
         $ctx = $this->context;
         if (isset($ctx[$key])) return $ctx[$key];
-        return cgy_arr_find($ctx, $key);
+        return Arr::find($ctx, $key);
     }
 
     /**
@@ -117,7 +120,7 @@ class Configer
      */
     public function fixConfVal($val = null)
     {
-        if (cgy_is_associate($val)) {
+        if (Is::associate($val)) {
             $vn = [];
             foreach ($val as $k => $v) {
                 $vn[$k] = $this->fixConfVal($v);
@@ -125,12 +128,12 @@ class Configer
             return $vn;
         }
 
-        if (cgy_is_ntf($val)) {
+        if (Is::ntf($val)) {
             //"null true false"
             eval("\$val = ".$val.";");
         } else if (is_numeric($val)) {
             $val = $val*1;
-        } else if (cgy_is_nemstr($val)) {
+        } else if (Is::nemstr($val)) {
             if ("," == substr($val, 0,1) || false !== strpos($val, ",")) {
                 //首字符为 , 或 包含字符 , 表示是一个 array
                 $val = trim(trim($val), ",");
@@ -141,7 +144,7 @@ class Configer
                     return trim($i);
                 }, $val);
             }
-        } else if ($val=="" || is_bool($val) || cgy_is_indexed($val)) {
+        } else if ($val=="" || is_bool($val) || Is::indexed($val)) {
             //$val = $val;
         } else {
             $val = null;
@@ -164,11 +167,11 @@ class Configer
      */
     public static function def($defs = [], $pre="")
     {
-        $pre = ($pre=="" || !cgy_is_nemstr($pre)) ? "" : strtoupper($pre)."_";
+        $pre = ($pre=="" || !Is::nemstr($pre)) ? "" : strtoupper($pre)."_";
         foreach ($defs as $k => $v) {
             $k = $pre.strtoupper($k);
             $ln = count(explode("_",$k));
-            if (cgy_is_associate($v) && !empty($v)) {
+            if (Is::associate($v) && !empty($v)) {
                 self::def($v, $k);
             } else {
                 if (!defined($k)) {

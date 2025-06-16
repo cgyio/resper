@@ -6,6 +6,13 @@
 //var_dump($title);
 //var_dump($msg);
 
+$panel_width = "";
+if (strpos(strtolower($title), "fatal error") !== false) {
+    $panel_width = "max-width: 960px;";
+}
+
+//$msg = str_replace(VENDOR_PATH, "", $msg);
+
 ?>
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -21,12 +28,23 @@
 </head>
 <body>
 
-<div class="notice_panel <?=$type?>-notice">
+<div class="notice_panel <?=$type?>-notice" style="<?=$panel_width?>">
     <div class="notice_title mg-b-m">
         <img src="<?=$icon?>" alt="">
-        <span class="f-xxl f-bold f-d3"><?=ucfirst($type)?>: <?=$title?></span>
+        <?php
+        $tstr = [
+            "error" => "Error",
+            "warn" => "请注意"
+        ];
+        if (isset($tstr[$type])) {
+        ?>
+        <span class="f-xxl f-bold mg-r-l" style="color: <?=$color?>;"><?=$tstr[$type]?> :</span>
+        <?php
+        }
+        ?>
+        <span class="f-xxl f-bold f-d3"><?=$title?></span>
     </div>
-    <div class="notice_info f-xl f-d3 mg-b-m">
+    <div class="notice_info f-l f-d3 mg-b-m">
         <?=$msg?>
     </div>
     <?php

@@ -121,4 +121,18 @@ class Request
 
     }
 
+    /**
+     * 静态方法
+     */
+    //$_GET
+    public static function get($key, $dft)
+    {
+        return self::$current->gets->$key($dft);
+    }
+    //$_POST
+    public static function post($key, $dft)
+    {
+        return self::$current->posts->$key($dft);
+    }
+
 }

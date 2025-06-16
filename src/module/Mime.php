@@ -188,9 +188,14 @@ class Mime
             $k = strtolower($key);
             if (isset($fms[$k])) return $fms[$k];
         }
-        if (Str::has($key, ".") && Str::hasAny($key, DS, "/", "\\")) {
-            $info = pathinfo($kay);
-            if (isset($info["extension"])) return strtolower($info["extension"]);
+        if (Str::has($key, ".")) {
+            if (Str::hasAny($key, DS, "/", "\\")) {
+                $info = pathinfo($kay);
+                if (isset($info["extension"])) return strtolower($info["extension"]);
+            } else {
+                $ka = explode(".",$key);
+                return strtolower(array_slice($ka, -1)[0]);
+            }
         }
         return null;
     }

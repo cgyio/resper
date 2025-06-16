@@ -5,16 +5,16 @@
  * QRcode generator
  */
 
-namespace Atto\Box\resource;
+namespace Cgy\module\resource;
 
-use Atto\Box\Request;
-use Atto\Box\Response;
+use Cgy\Request;
+use Cgy\Response;
 
 class QRcodeUsage
 {
     public static function create($msg = null)
     {
-        $msg = Request::get("msg", $msg); //要编码的内容，经过urlencode
+        $msg = Request::$current->gets->msg($msg);  //Request::get("msg", $msg); //要编码的内容，经过urlencode
         $msg = urldecode($msg);
         $tp = Request::get("type", "string");
         switch($tp){
@@ -22,11 +22,11 @@ class QRcodeUsage
                 $msg = str_replace("|","/",$msg);
                 break;
         }
-        $f = Request::get("f", FALSE);           //保存为文件名，不带后缀，FALSE为不保存
-        $e = Request::get("e", QR_ECLEVEL_H);    //容错级别  L/M/Q/H
-        $s = Request::get("s", 6);               //图片大小 1-10
-        $m = Request::get("m", 2);               //二维码与白背景的边距
-        $p = Request::get("p", FALSE);           //是否在保存的同时输出
+        $f = Request::$current->gets->f(false);         //Request::get("f", FALSE);           //保存为文件名，不带后缀，FALSE为不保存
+        $e = Request::$current->gets->e(QR_LEVEL_H);    //Request::get("e", QR_ECLEVEL_H);    //容错级别  L/M/Q/H
+        $s = Request::$current->gets->s(6);             //Request::get("s", 6);               //图片大小 1-10
+        $m = Request::$current->gets->m(2);             //Request::get("m", 2);               //二维码与白背景的边距
+        $p = Request::$current->gets->p(false);         //Request::get("p", FALSE);           //是否在保存的同时输出
         $p = $p!==FALSE ? TRUE : FALSE;
 
         //return self::createQrCodeImg($msg, $f, $e, $s, $m, $p);

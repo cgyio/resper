@@ -225,6 +225,7 @@ class Db
                 return $this->hasModel($i);
             }, $mds);
         }
+        var_dump($mclss);
         $mclss = array_merge(array_filter($mclss, function ($i) {
             return !empty($i) && class_exists($i);
         }));
@@ -254,6 +255,9 @@ class Db
      */
     public function hasModel($model)
     {
+        //检查当前 resper 是否存在
+        if (!$this->resper instanceof Resper) return false;
+        
         $mds = $this->config->models;
         if (in_array($model, $mds)) {
             $mdn = $model;
@@ -265,14 +269,46 @@ class Db
                 return false;
             }
         }
+        //在 $this->resper->conf["model"]["path"] 路径下查找模型文件
+        $mdp = $this->resper->conf["orm"]["model"]["path"] ?? null;
+        var_dump($mdp);
+        if (!Is::nemstr($mdp)) {
+            var_dump($this->resper->conf);
+            //未指定模型文件路径
+            return false;
+        }
+        $dbn = $this->name;     //数据库名称
+        //模型文件路径
+        $mdf = $mdp.DS.$dbn.DS.ucfirst($mdn).EXT;
+        var_dump($mdf);
+        if (!file_exists($mdf)) {
+            //模型文件不存在
+            return false;
+        }
+        //模型类全称
+        $clsp = $this->resper->conf["orm"]["model"]["clsp"] ?? null;
+        var_dump($clsp);
+        if (!Is::nemstr($clsp)) {
+            //未指定模型类全称 前缀
+            return false;
+        }
+        $mdcls = $clsp."\\".$dbn."\\".ucfirst($mdn);
+        var_dump($mdcls);
+        if (class_exists($mdcls)) return $mdcls;
+        return false;
+
+        //首先，在预定义的位置查找 model 类文件，设置在 app/appname/library/Config.php 中定义 model 项目，可以是任意路径
+        /*$mdps = $this->resper->conf["orm"]["model"] ?? [];
+        if (Is::nemstr($mdps)) $mdps = Arr::mk($mdps);
+        if (!Is::nemarr($mdps)) $mdps = Arr::mk(DIR_MODEL);
+        $mdp = Path::exists($)
+
         //在当前 Resper 实例所在路径下 查找 model 类
-        if (!$this->resper instanceof Resper) return false;
-        $dbn = $this->name;
         $mdcls = $this->resper->cls("model/".$dbn."/".ucfirst($mdn));
         if (empty($mdcls)) return false;
         //在数据库中查找是否实际存在表
         if (!$this->hasTable($model)) return false;
-        return $mdcls;
+        return $mdcls;*/
     }
 
     /**
@@ -310,6 +346,11 @@ class Db
     public function __get($key)
     {
         //var_dump($key);
+        /**
+         * $db->conf --> $db->config->ctx()
+         */
+        if ($key=="conf") return $this->config->ctx();
+
         /**
          * $db->Model 
          * 将数据库实例内部指针 currentModel 指向 当前的 model 类

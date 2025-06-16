@@ -114,12 +114,8 @@ class Path extends Util
             "subDir" => "",
             "checkDir" => false
         ], $options);
-        if (file_exists($path)) {
-            if ($options["checkDir"]==false) return $path;
-        }
-        if (is_dir($path)) {
-            if ($options["checkDir"]==true) return $path;
-        }
+        if (file_exists($path) && $options["checkDir"]==false) return $path;
+        if (is_dir($path) && $options["checkDir"]==true && substr($path, 0, 4)!="app/") return $path;
         $path = trim(str_replace("/", DS, $path), DS);
         $local = [];
 
@@ -134,12 +130,14 @@ class Path extends Util
         if (!empty($inDir)) {
             $parr = explode(DS, $path);
             //if (strtolower($parr[0]) == "app" || !is_null(Resper::cls("App/".ucfirst(strtolower($parr[0]))))) {
-            if (strtolower($parr[0]) == "app" || is_dir(APP_PATH.strtolower($parr[0]))) {
+            if (strtolower($parr[0]) == "app" || is_dir(APP_PATH.DS.strtolower($parr[0]))) {
                 if (strtolower($parr[0]) == "app") array_shift($parr);
                 if (is_dir(APP_PATH.DS.$parr[0])) {
                     $app = array_shift($parr);
+                    $appDir[] = "app/$app";
                     foreach ($inDir as $i => $dir) {
                         $appDir[] = "app/$app/$dir";
+                        //$appDir[] = APP_PATH.DS.$app.DS.$dir;
                     }
                     $npath = implode(DS, $parr);
                     $gl = self::_findarr($npath, [
@@ -185,6 +183,10 @@ class Path extends Util
         
         //var_dump($local);
         //exit;
+        if (isset($_GET["break_dump"]) && $_GET["break_dump"]=="yes") {
+            var_dump($local);
+            //exit;
+        }
         //break_dump("break_pathfind", $local);
         
         foreach ($local as $i => $v) {

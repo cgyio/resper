@@ -8,8 +8,8 @@ namespace Cgy\module;
 
 use Cgy\Module;
 use Cgy\module\Mime;
-use Cgy\resource\Builder;
-use Cgy\resource\Compiler;
+use Cgy\module\resource\Builder;
+use Cgy\module\resource\Compiler;
 use Cgy\request\Url;
 use Cgy\request\Curl;
 use Cgy\Response;
@@ -284,7 +284,7 @@ class Resource/* extends Module*/
             if (strpos($path, ".")===false) $path .= ".txt";
             $p = [
                 "rawPath"   => $path,
-                "rawExt"    => Mime::ext($path),
+                "rawExt"    => Mime::getExt($path),
                 "resType"   => 'create',
                 "realPath"  => '',
                 "params"    => $params,
@@ -356,7 +356,7 @@ class Resource/* extends Module*/
         //sent header
         //$this->sentHeader();
         Mime::setHeaders($this->rawExt, $this->rawBasename);
-        Response::sentHeaders();
+        Response::$current->header->sent();
         
         //echo
         echo $this->content;

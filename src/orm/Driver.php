@@ -6,12 +6,28 @@
 namespace Cgy\orm;
 
 use Cgy\orm\Db;
+use Cgy\util\Is;
+use Cgy\util\Cls;
 
 class Driver extends Db
 {
     /**
      * !! 必须实现 !!
      */
+
+    /**
+     * 根据 Orm 参数，解析获取数据库相关的必须参数
+     * @param Array $conf Orm 参数
+     * @return Array 数据库路径，文件地址等必要参数 [ path=>'', dbns=>[ 路径下所有可用数据库 名称数组 ], ... ]
+     */
+    public static function initOrmConf($conf = [])
+    {
+
+        return [
+            "path" => "",
+            "dbns" => []
+        ];
+    }
 
     /**
      * 根据 Orm 参数，创建每个 Db 的 Medoo 连接参数
@@ -74,5 +90,19 @@ class Driver extends Db
         //... 子类实现
 
         return [];
+    }
+
+
+
+    /**
+     * 通用方法
+     */
+    //判断是否支持某种类型的数据库，支持则返回 类全称，不支持则返回 false
+    public static function support($dbtype)
+    {
+        if (!Is::nemstr($dbtype)) return false;
+        $driver = Cls::find("orm/driver/".$dbtype);
+        if (Is::nemstr($driver) && class_exists($driver)) return $driver;
+        return false;
     }
 }

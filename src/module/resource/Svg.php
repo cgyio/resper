@@ -7,10 +7,16 @@
  * SVG
  */
 
-namespace Atto\Box\resource;
+namespace Cgy\module\resource;
 
-use Atto\Box\Resource;
-use Atto\Box\Response;
+use Cgy\Response;
+use Cgy\module\Resource;
+use Cgy\module\Mime;
+use Cgy\util\Arr;
+use Cgy\util\Str;
+use Cgy\util\Is;
+use Cgy\util\Conv;
+use Cgy\util\Css;
 
 use Sabberworm\CSS\Parser as cssParser;
 
@@ -64,7 +70,7 @@ class Svg extends Resource
      */
     public function export($params = [])
     {
-        $params = empty($params) ? $this->params : arr_extend($this->params, $params);
+        $params = empty($params) ? $this->params : Arr::extend($this->params, $params);
         
         if ($this->needParse()) {
             //根据 params 编辑 icon svg
@@ -146,8 +152,8 @@ class Svg extends Resource
         }*/
 
         //sent header
-        Mime::header($this->rawExt, $this->rawBasename);
-        Response::headersSent();
+        Mime::setHeaders($this->rawExt, $this->rawBasename);
+        Response::$current->header->sent();
 
         //echo
         echo $xml;
@@ -168,9 +174,9 @@ class Svg extends Resource
     protected function parseIconSvg()
     {
         if ($this->isIcon() && is_null($this->xml)) {
-            $this->xml = x2a($this->getContent());
+            $this->xml = Conv::x2a($this->getContent());
             $attr = $this->xml["@attributes"];
-            $this->xml["@attributes"] = arr_extend($this->defaultIconAttributes, $attr);
+            $this->xml["@attributes"] = Arr::extend($this->defaultIconAttributes, $attr);
             //fix viewBox,width,height
             $vb = $this->xml["@attributes"]["viewBox"];
             if ($vb != "0 0 1024 1024") {
@@ -181,13 +187,13 @@ class Svg extends Resource
             //fix pathes,g,...
             foreach ($this->xml as $k => $v) {
                 if ($k == "@attributes" || !is_array($v)) continue;
-                if (is_indexed($v)) continue;
+                if (Is::indexed($v)) continue;
                 $this->xml[$k] = [];
                 $this->xml[$k][] = $v;
             }
             //处理 style
             if (!isset($this->xml["style"])) $this->xml["style"] = [];
-            if (is_notempty_str($this->xml["style"])) {
+            if (Is::nemstr($this->xml["style"])) {
                 /*$st = $this->xml["style"];
                 $st = str_replace("\r\n","", trim($st));
                 $st = preg_replace("/\s+/"," ", $st);
@@ -199,7 +205,7 @@ class Svg extends Resource
                     $stia = explode("{", $sti);
                     $k = "cls_".str_replace(".","",trim($stia[0]));
                     $v = str_replace(",\"\"}", "}", ("{\"".str_replace(":", "\":\"", str_replace(";", "\",\"", trim($stia[1]) ) )."\"}") );
-                    $v = j2a($v);
+                    $v = Conv::j2a($v);
                     $sts[$k] = $v;
                 }
                 $this->xml["style"] = $sts;*/
@@ -221,7 +227,7 @@ class Svg extends Resource
     {
         if (!isset($this->xml["style"])) $this->xml["style"] = "";
         $st = $this-xml["style"];
-        if (is_notempty_str($st)) {
+        if (Is::nemstr($st)) {
             $parser = new cssParser($this->xml["style"]);
             $css = $parser->parse();
         }
@@ -276,7 +282,7 @@ class Svg extends Resource
         $xml = "";
         if ($isRoot) {
             $xml .= implode("", $this->header);
-            $xml .= "<svg ".a2p($arr["@attributes"]).">";
+            $xml .= "<svg ".Conv::a2p($arr["@attributes"]).">";
             $style = $this->xml["style"];
             if (!empty($style)) {
                 $xml .= "<style type=\"text/css\">";
@@ -286,12 +292,12 @@ class Svg extends Resource
         }
         foreach ($arr as $k => $v) {
             if ($k == "@attributes" || $k === "style") continue;
-            if (is_indexed($v)) {
+            if (Is::indexed($v)) {
                 for ($i=0;$i<count($v);$i++) {
                     $vi = $v[$i];
                     $xml .= "<$k";
                     if (isset($vi["@attributes"])) {
-                        $xml .= " ".a2p($vi["@attributes"]);
+                        $xml .= " ".Conv::a2p($vi["@attributes"]);
                     }
                     $xml .= ">";
                     if (!is_array($vi)) {
@@ -304,7 +310,7 @@ class Svg extends Resource
             } else {
                 $xml .= "<$k";
                 if (isset($v["@attributes"])) {
-                    $xml .= " ".a2p($v["@attributes"]);
+                    $xml .= " ".Conv::a2p($v["@attributes"]);
                 }
                 $xml .= ">";
                 if (!is_array($v)) {
@@ -474,7 +480,7 @@ class Svg extends Resource
      */
     protected function editIconReverse($p = null)
     {
-        if (!is_notempty_str($p) || !in_array($p,["yes","no"])) $p = "no";
+        if (!Is::nemstr($p) || !in_array($p,["yes","no"])) $p = "no";
         if ($p!=="yes") return $this;
         $kw = "fill";
         $style = $this->xml["style"];
@@ -570,7 +576,7 @@ class Svg extends Resource
      */
     protected function parseCssToArr($css = "")
     {
-        if (!is_notempty_str($css)) return [];
+        if (!Is::nemstr($css)) return [];
         $css = str_replace("\r\n","", trim($css));
         $css = preg_replace("/\s+/"," ", $css);
         $cssarr = explode("}", $css);
@@ -581,13 +587,13 @@ class Svg extends Resource
             $cssia = explode("{", $cssi);
             $k = "cls_".str_replace(".","",trim($cssia[0]));
             $v = trim($cssia[1]);
-            $v = replace_all([
+            $v = Str::replaceAll([
                 [";", "\",\""],
                 [":", "\":\""]
             ], $v);
             $v = "{\"$v\"}";
             $v = str_replace(",\"\"}", "}", $v);
-            $v = j2a($v);
+            $v = Conv::j2a($v);
             $ca[$k] = $v;
         }
         return $ca;
@@ -598,14 +604,14 @@ class Svg extends Resource
      */
     protected function parseArrToCss($arr = [])
     {
-        if (!is_notempty_arr($arr) || !is_associate($arr)) return "";
+        if (!Is::nemarr($arr) || !Is::associate($arr)) return "";
         $css = "";
         foreach ($arr as $cls => $v) {
             if (empty($v)) {
                 $css .= ".$cls{}";
             } else {
-                $s = a2j($v);
-                $s = replace_all([
+                $s = Conv::a2j($v);
+                $s = Str::replaceAll([
                     ["{\"",   "{",],
                     ["\":\"", ":",],
                     ["\":",   ":",],
@@ -628,9 +634,9 @@ class Svg extends Resource
      */
     protected function parseColor($p = null)
     {
-        if (!is_notempty_str($p)) return null;
+        if (!Is::nemstr($p)) return null;
         if (substr($p, 0, 3)=="rgb" || substr($p, 0, 3)=="hsl") return $p;
-        $hex = color_names($p);
+        $hex = Css::color_names($p);
         if (!is_null($hex)) return $hex;
         if (strlen($p)==6 || strlen($p)==8) return "#".$p;
         return null;

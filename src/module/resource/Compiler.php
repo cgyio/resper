@@ -11,9 +11,10 @@
  *      ts           -> js
  */
 
-namespace Atto\Box\resource;
+namespace Cgy\module\resource;
 
-use Atto\Box\resource\Mime;
+use Cgy\module\Mime;
+use Cgy\util\Path;
 
 use ScssPhp\ScssPhp\Compiler as scssCompiler;
 use ScssPhp\ScssPhp\OutputStyle as scssOutputStyle;
@@ -106,7 +107,7 @@ class Compiler
         foreach ($cext as $i => $ext) {
             $ps[] = $pi["dirname"].DS.$pi["filename"].".$ext";
         }
-        return path_exists($ps);
+        return Path::exists($ps);
     }
 
     //根据文件ext获取编译文件ext，css -> scss,sass

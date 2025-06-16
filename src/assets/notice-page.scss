@@ -51,7 +51,31 @@ body {
         width: 100%;
         padding-left: $row-gap-left; //margin-bottom: $size-gap;
         box-sizing: border-box;
+        @include flex-y;
         line-height: 150%;
+
+        &>h3, &>ul>li {
+            width: 100%;
+            box-sizing: border-box;
+            line-height: 150%;
+            color: $color-fc-d3;
+            font-family: $font-fml-code;
+        }
+        &>h3 {
+            margin: 0 0 $size-gap 0;
+            font-size: $size-f-l;
+            font-weight: bold;
+        }
+        &>ul {
+            width: 100%; margin: 0; padding: 0;
+            box-sizing: border-box;
+            @include flex-y;
+            &>li {
+                font-size: $size-f;
+                color: $color-fc-l1;
+                list-style: none;
+            }
+        }
     }
 
     &>.notice_row {
@@ -62,7 +86,7 @@ body {
         font: {
             family: $font-fml-code;
         }
-        color: $color-fc-l2;
+        color: $color-fc-l1;
         cursor: default;
         @include trans;
 

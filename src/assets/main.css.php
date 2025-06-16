@@ -15,7 +15,7 @@ $scss[] = "@import \"https://io.cgy.design/normalize/@\";";
 /**
  * 调用 io.cgy.design/theme/h5/base 主题样式
  */
-$scss[] = \Cgy\request\Curl::get("https://io.cgy.design/theme/h5/base/light.scss", "ssl");
+$scss[] = \Cgy\request\Curl::get("https://io.cgy.design/theme/h5/base/light.scss?base=cgy-btn", "ssl");
 
 /**
  * 调用 与此 css 文件同名的 scss 文件，必须在 $basePath 路径下

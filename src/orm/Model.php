@@ -25,6 +25,7 @@ use Cgy\Response;
 use Cgy\util\Is;
 use Cgy\util\Arr;
 use Cgy\util\Str;
+use Cgy\util\Path;
 
 class Model extends Record
 {
@@ -424,7 +425,47 @@ class Model extends Record
 
 
 
+    /**
+     * 通用方法
+     */
 
+    /**
+     * 根据 orm 参数中的 models 项，解析得到当前数据库 model 文件路径
+     * @param Array $conf 参数数组，包含 models 项内容
+     * @return Array 解析得到的 model 模型文件路径参数 [path=>'模型类文件路径', clsp=>'模型类全称前缀', ...]
+     */
+    public static function initOrmConf($conf = [])
+    {
+        $ormc = [
+            "path" => "",
+            "clsp" => ""
+        ];
+
+        $models = $conf["models"] ?? DIR_MODEL;
+        $mdps = Is::nemstr($models) ? explode(",", trim($models, ",")) : $models;
+        if (!Is::nemarr($mdps) || !Is::indexed($mdps)) $mdps = explode(",", DIR_MODEL);
+        $mdp = Path::exists($mdps, [
+            "checkDir" => true,
+            "all" => false
+        ]);
+        //var_dump($mdp);
+        if (empty($mdp)) $mdp = Path::find("root/model", ["checkDir"=>true]);
+        if (!empty($mdp)) {
+            $ormc["path"] = Path::fix($mdp);
+            //获取类全称前缀
+            $ns = defined("NS") ? NS : "\\Cgy\\";
+            $root = defined("ROOT_PATH") ? ROOT_PATH.DS : DS."data".DS;
+            $clsp = $ns . str_replace($root, "", $mdp);
+            $clsp = str_replace(DS,"\\", $clsp);
+            $ormc["clsp"] = $clsp;
+
+        } else {
+            //指定的数据库文件路径不存在，报错
+            trigger_error("resper::指定的数据模型路径不存在，DIRS = ".implode(", ",$mdps), E_USER_ERROR);
+        }
+
+        return $ormc;
+    }
 
 
 

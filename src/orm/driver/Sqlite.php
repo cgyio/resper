@@ -29,6 +29,46 @@ class Sqlite extends Driver
     /**
      * !! 必须实现 !!
      */
+    
+    /**
+     * 根据 Orm 参数，解析获取数据库相关的必须参数
+     * @param Array $conf Orm 参数
+     * @return Array 数据库路径，文件地址等必要参数 [ path=>'', dbns=>[ 路径下所有可用数据库 名称数组 ], ... ]
+     */
+    public static function initOrmConf($conf = [])
+    {
+        $ormc = [
+            "path" => "",
+            "dbns" => []
+        ];
+
+        $dirs = $conf["dirs"] ?? DIR_DB;
+        if (Is::nemstr($dirs)) $dirs = explode(",", trim($dirs, ","));
+        $dbp = Path::exists($dirs, [
+            "checkDir" => true,
+            "all" => false
+        ]);
+        //var_dump($dbp."####dbp");
+        if (empty($dbp)) $dbp = Path::find("root/library/db", ["checkDir"=>true]);
+        if (!empty($dbp)) {
+            $ormc["path"] = Path::fix($dbp);
+            //查询数据库列表
+            $dbns = [];
+            $dbph = @opendir($dbp);
+            while(false !== ($dbn = readdir($dbph))) {
+                if (in_array($dbn, [".",".."]) || is_dir($dbp.DS.$dbn) || strpos($dbn, ".db")===false) continue;
+                $dbn = str_replace(".db","",$dbn);
+                if (!in_array($dbn, $dbns)) $dbns[] = $dbn;
+            }
+            @closedir($dbph);
+            $ormc["dbns"] = $dbns;
+        } else {
+            //指定的数据库文件路径不存在，报错
+            trigger_error("resper::指定的数据库路径不存在，DIRS = ".implode(", ",$dirs), E_USER_ERROR);
+        }
+
+        return $ormc;
+    }
 
     /**
      * 根据 Orm 参数，创建每个 Db 的 Medoo 连接参数

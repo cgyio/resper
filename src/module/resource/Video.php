@@ -9,10 +9,10 @@
  * temporary support: mp4
  */
 
-namespace Atto\Box\resource;
+namespace Cgy\module\resource;
 
-use Atto\Box\Resource;
-use Atto\Box\resource\Stream;
+use Cgy\module\Resource;
+use Cgy\module\resource\Stream;
 
 class Video extends Resource
 {

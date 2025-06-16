@@ -7,12 +7,17 @@
  * Local resource dynamic build，for plain file like: js，css，vue ...
  */
 
-namespace Atto\Box\resource;
+namespace Cgy\module\resource;
 
-use Atto\Box\Resource;
-use Atto\Box\resource\Compiler;
-use Atto\Box\request\Url;
-use Atto\Box\request\Curl;
+use Cgy\module\Resource;
+use Cgy\module\resource\Compiler;
+use Cgy\request\Url;
+use Cgy\request\Curl;
+use Cgy\util\Arr;
+use Cgy\util\Str;
+use Cgy\util\Is;
+use Cgy\util\Conv;
+use Cgy\util\Path;
 
 use ScssPhp\ScssPhp\Compiler as scssCompiler;
 use ScssPhp\ScssPhp\OutputStyle as scssOutputStyle;
@@ -35,7 +40,7 @@ class Builder
     public function __construct($resource)
     {
         $this->resource = &$resource;
-        $this->params = arr_extend($this->params, $this->resource->params);
+        $this->params = Arr::extend($this->params, $this->resource->params);
     }
 
 
@@ -106,7 +111,7 @@ class Builder
     {
         $res = $this->resource;
         $uarr = empty($uarr) ? $this->params["use"] : $uarr;
-        if (!is_array($uarr)) $uarr = arr($uarr);
+        if (!is_array($uarr)) $uarr = Arr::mk($uarr);
         //if (empty($uarr)) return $this;
         //var_dump($uarr); exit;
         $dir = $res->realPath;
@@ -135,9 +140,9 @@ class Builder
     protected function buildSubDir($subdir = null)
     {
         $res = $this->resource;
-        if (is_notempty_str($subdir)) {
+        if (Is::nemstr($subdir)) {
             $dir = $res->realPath.DS.$subdir;
-            $uarr = arr($this->params[$subdir]);
+            $uarr = Arr::mk($this->params[$subdir]);
             if (!in_array($subdir, $uarr)) array_unshift($uarr, $subdir);
             if (!is_dir($dir)) return $this;
             $ext = $res->rawExt;
@@ -238,7 +243,7 @@ class Builder
     {
         $dir = empty($dir) ? $this->resource->realPath : $dir;
         $vers = [];
-        path_traverse($dir, function($p, $f) use (&$vers) {
+        Path::traverse($dir, function($p, $f) use (&$vers) {
             $fp = $p . DS . $f;
             if (is_dir($fp)) {
                 $ver = str_replace(".", "", $f);
@@ -281,7 +286,7 @@ class Builder
             $path.DS.$ext.DS.$name.".$ext"
         ]);
         //var_dump($ps);
-        $f = path_exists($ps,["inDir"=>[]]);
+        $f = Path::exists($ps,["inDir"=>[]]);
         return $f;
     }
 

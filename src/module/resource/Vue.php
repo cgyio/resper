@@ -7,12 +7,17 @@
  * VUE file processor
  */
 
-namespace Atto\Box\resource;
+namespace Cgy\module\resource;
 
-use Atto\Box\Resource;
-use Atto\Box\Request;
-use Atto\Box\Response;
-use Atto\Box\resource\Mime;
+use Cgy\module\Resource;
+use Cgy\Request;
+use Cgy\Response;
+use Cgy\module\Mime;
+use Cgy\util\Arr;
+use Cgy\util\Str;
+use Cgy\util\Is;
+use Cgy\util\Conv;
+
 use MatthiasMullie\Minify;  //JS/CSS文件压缩
 
 class Vue extends Resource
@@ -58,7 +63,7 @@ class Vue extends Resource
      */
     public function export($params = [])
     {
-        $params = empty($params) ? $this->params : arr_extend($this->params, $params);
+        $params = empty($params) ? $this->params : Arr::extend($this->params, $params);
 
         //get resource content
         $this->getContent();
@@ -70,7 +75,7 @@ class Vue extends Resource
         
         /** 在输出之前 注入 profile 数据 **/
         if (isset($ps["profile"])) {
-            $this->profile = arr_extend($this->profile, $ps["profile"]);
+            $this->profile = Arr::extend($this->profile, $ps["profile"]);
             unset($ps["profile"]);
         }
 
@@ -85,8 +90,8 @@ class Vue extends Resource
 
         //sent header
         //$this->sentHeader($this->expExt);
-        Mime::header($this->expExt);
-        Response::headersSent();
+        Mime::setHeaders($this->expExt);
+        Response::$current->header->sent();
 
 
         //echo
@@ -106,7 +111,7 @@ class Vue extends Resource
         $count = 0;
         $temp = "";
         $regx = "/\<template\>[\s\S]*\<\/template\>/";
-        str_each($cnt, $regx, function($str, $i) use (&$count, &$temp) {
+        Str::each($cnt, $regx, function($str, $i) use (&$count, &$temp) {
             if ($count>0) return false;
             $temp = $str;
             $count++;
@@ -126,7 +131,7 @@ class Vue extends Resource
         $count = 0;
         $temp = "";
         $regx = "/\<script\>[\s\S]*\<\/script\>/";
-        str_each($cnt, $regx, function($str, $i) use (&$count, &$temp) {
+        Str::each($cnt, $regx, function($str, $i) use (&$count, &$temp) {
             if ($count>0) return false;
             $temp = $str;
             $count++;
@@ -171,7 +176,7 @@ class Vue extends Resource
 
         $nodes = [];
         $regx = "/\<(\w|\-)+[^\>]*\>[\s\S]*\<\/(\w|\-)+\>/U";
-        str_each($cnt, $regx, function($str, $i) use (&$nodes) {
+        Str::each($cnt, $regx, function($str, $i) use (&$nodes) {
             $str = explode("</", $str);
             $nodes[] = trim($str[1], ">");
         });
@@ -186,7 +191,7 @@ class Vue extends Resource
     {
         if (isset($this->custom["profile"]) && is_string($this->custom["profile"]["content"])) {
             $pfs = $this->custom["profile"]["content"];
-            $this->profile = j2a($pfs);
+            $this->profile = Conv::j2a($pfs);
         }
     }
 
@@ -198,11 +203,11 @@ class Vue extends Resource
         $cnts = [];
         //$node = str_replace("-","\\-")
         $regx = "/\<".$node."[^\>]*\>[\s\S]*\<\/".$node."\>/U";
-        str_each($cnt, $regx, function($str, $i) use (&$cnts, $node) {
+        Str::each($cnt, $regx, function($str, $i) use (&$cnts, $node) {
             //var_dump($str);
             $regx = "/\<".$node."[^\>]*\>/";
             $attr = [];
-            str_each($str, $regx, function($s, $k) use (&$attr) {
+            Str::each($str, $regx, function($s, $k) use (&$attr) {
                 $attr = $this->parseAttr($s);
             });
             $str = preg_replace($regx, "", $str);
@@ -223,7 +228,7 @@ class Vue extends Resource
         $attr = [];
         //var_dump($str);
         $regx = "/\s+.+((\=\"[^\"]+\")|\s|\>)/U";
-        str_each($str, $regx, function($s, $i) use (&$attr) {
+        Str::each($str, $regx, function($s, $i) use (&$attr) {
             $s = trim(trim(trim($s, "\r\n"), ">"));
             //var_dump($s);
             $sa = explode("=", str_replace("\"", "", trim($s)));
@@ -250,7 +255,7 @@ class Vue extends Resource
     //component name，按顺序从 $_GET["name"] / profile["name"] / pathinfo(realPath)["filename"] 中获取
     public function name()
     {
-        $name = Request::get("name", $this->profile["name"]);
+        $name = Request::$current->gets->name($this->profile["name"]);
         if (empty($name)) {
             $name = pathinfo($this->realPath)["filename"];
         }
@@ -396,8 +401,8 @@ class Vue extends Resource
         $tit = "/".implode("/", $this->chain("title"))."/".$atom["title"];
         $ah = $atom["hash"];
         $au = isset($atom["auth"]) ? $atom["auth"] : null;
-        if (is_notempty_str($au) || (is_indexed($au) && !empty($au))) {
-            if (is_notempty_str($au)) $au = explode(",", $au);
+        if (Is::nemstr($au) || (Is::indexed($au) && !empty($au))) {
+            if (Is::nemstr($au)) $au = explode(",", $au);
             if (in_array("all",$au)) return true;
             if (in_array("none",$au)) return $tit;
             $ck = $usr->uo->authCheck($au);
@@ -440,6 +445,6 @@ class Vue extends Resource
         $cnt = file_get_contents($vuefile);
         if (empty($cnt)) return null;
         $pf = explode("</profile>", explode("<profile>", $cnt)[1])[0];
-        return j2a($pf);
+        return Conv::j2a($pf);
     }
 }

@@ -136,6 +136,19 @@ class Config extends Configer
             /*
             "app name" => [
                 修改各 \Cgy\App\appname\Config 类的 init 参数
+                
+                "name" => "乾耀PMS",
+
+                //App 数据库参数
+                "orm" => [
+                    "enable" => true,
+                    "type" => "sqlite",
+                    "dirs" => "../foo/bar/libary/db",   //可以不在当前响应者路径下
+                    "models" => "../../model/foo",      //可以不再当前响应者路径下
+                    "required" => [
+                        "usr",...
+                    ],
+                ],
             ],
             */
         ],
@@ -222,7 +235,8 @@ class Config extends Configer
             "assets_path"   => $root . DS . "assets",
             "lib_path"      => $root . DS . "library",
             //"db_path"       => $root . DS . str_replace("/", DS, trim($this->ctx("db/base"), "/")),   //"library" . DS ."db",
-            //"MODEL_path"    => $root . DS . "model",
+            //"db_path"       => $root . DS . "library" . DS ."db",
+            //"model_path"    => $root . DS . "model",
             //"record_path"   => $root . DS . "record",
             //"opr_path"      => $root . DS . "operater",
             "page_path"     => $root . DS . "page",
@@ -383,6 +397,7 @@ class Config extends Configer
                     $apn => $cfg->ctx()
                 ]
             ]);
+            //var_dump($cfg->ctx());
             //保存 module configer 实例
             $aco[$apn] = $cfg;
         }
