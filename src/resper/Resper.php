@@ -469,7 +469,7 @@ class Resper extends ResperBase
      * 初始化 关联的 Orm 数据库操作类 并创建实例
      * @return Resper $this
      */
-    private function initOrm()
+    private function __initOrm()
     {
 
 

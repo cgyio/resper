@@ -225,7 +225,7 @@ class Db
                 return $this->hasModel($i);
             }, $mds);
         }
-        var_dump($mclss);
+        //var_dump($mclss);
         $mclss = array_merge(array_filter($mclss, function ($i) {
             return !empty($i) && class_exists($i);
         }));
@@ -271,29 +271,29 @@ class Db
         }
         //在 $this->resper->conf["model"]["path"] 路径下查找模型文件
         $mdp = $this->resper->conf["orm"]["model"]["path"] ?? null;
-        var_dump($mdp);
+        //var_dump($mdp);
         if (!Is::nemstr($mdp)) {
-            var_dump($this->resper->conf);
+            //var_dump($this->resper->conf);
             //未指定模型文件路径
             return false;
         }
         $dbn = $this->name;     //数据库名称
         //模型文件路径
         $mdf = $mdp.DS.$dbn.DS.ucfirst($mdn).EXT;
-        var_dump($mdf);
+        //var_dump($mdf);
         if (!file_exists($mdf)) {
             //模型文件不存在
             return false;
         }
         //模型类全称
         $clsp = $this->resper->conf["orm"]["model"]["clsp"] ?? null;
-        var_dump($clsp);
+        //var_dump($clsp);
         if (!Is::nemstr($clsp)) {
             //未指定模型类全称 前缀
             return false;
         }
         $mdcls = $clsp."\\".$dbn."\\".ucfirst($mdn);
-        var_dump($mdcls);
+        //var_dump($mdcls);
         if (class_exists($mdcls)) return $mdcls;
         return false;
 
@@ -349,7 +349,7 @@ class Db
         /**
          * $db->conf --> $db->config->ctx()
          */
-        if ($key=="conf") return $this->config->ctx();
+        if ($key=="conf" && $this->currentModel=="") return $this->config->ctx();
 
         /**
          * $db->Model 
@@ -358,11 +358,11 @@ class Db
          */
         if ($this->hasModel($key)!==false) {
             $mcls = $this->model($key);
-            //指针指向 model 类全称
-            $this->currentModel = $mcls;
-            //准备 curd 操作
-            if ($this->curdInited()!=true || $this->curd->model::$config->name!=$key) {
-                //仅当 curd 操作未初始化，或 当前 curd 操作为针对 此 数据表(模型) 类 时，重新初始化 curd
+            if ($this->curdInited()!=true || $this->curd->model!=$mcls) {
+                //仅当 curd 操作未初始化，或 当前 curd 操作针对 其他 数据表(模型) 类 时，执行：
+                // 1 指针指向 model 类全称
+                $this->currentModel = $mcls;
+                // 2 重新初始化 curd
                 $this->curdInit($key);
             }
             //返回 $db 自身，准备接收下一步操作指令
@@ -374,6 +374,11 @@ class Db
          */
         if ($this->currentModel!="") {
             $model = $this->currentModel;
+
+            /**
+             * $db->Model->mcls  返回当前操作的 model 类全称
+             */
+            if ($key=="mcls") return $this->currentModel;
 
             /**
              * $db->Model->property 

@@ -278,21 +278,42 @@ class Orm
      */
     public static function __callStatic($key, $args)
     {
-        /**
-         * Orm::Db()
-         * 返回 Db 实例
-         */
-        if (Orm::hasApp($key)) {
-            //已实例化的，直接返回
-            if (Orm::appInsed($key)) return Orm::$APP[$key];
-            //实例化 DbApp
-            $cls = cls("app/$key");
-            if (!class_exists($cls)) return null;
-            $app = new $cls();
-            //缓存
-            Orm::cacheApp($app);
-            //返回 DbApp 实例
-            return $app;
+        $orm = Orm::$current;
+
+        if ($orm instanceof Orm) {
+            //当前响应者实例 存在与其关联的 Orm 实例
+
+            /**
+             * Orm::Dbn()           返回 Db 实例
+             * Orm::Dbn("Tbn")      返回 Db 实例，同时将 Db->currentModel 指向 Tbn
+             */
+            if ($orm->hasDb($key)!==false) {
+                $dbo = $orm->$key;
+                if (!$dbo instanceof Db) return null;
+                if (Is::nemarr($args)) {
+                    $mdn = array_shift($args);
+                    if ($dbo->hasModel($mdn)) {
+                        return $dbo->$mdn;
+                    } else {
+                        return null;
+                    }
+                }
+                return $orm->$key; 
+            }
+
+            /**
+             * Orm::DbnTbn()    返回 Db 实例，同时将 Db->currentModel 指向 Tbn
+             */
+            if (Str::beginUp($key)) {
+                $ks = Str::snake($key, "-");
+                $ks = str_replace("-", " ", $ks);
+                $ks = ucwords($ks);
+                $ka = explode(" ", $ks);
+                if (count($ka)<=0) return null;
+                $dbn = array_shift($ka);
+                return Orm::$dbn(...$ka);
+            }
+
         }
 
         return null;
