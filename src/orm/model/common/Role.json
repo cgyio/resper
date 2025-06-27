@@ -1,0 +1,55 @@
+{
+    
+    "name": "role",
+    "title": "角色表",
+    "desc": "记录角色数据，赋予操作权限",
+    "prepare": {
+        "columns": [],
+        "idx": {
+            "unique": ["key"]
+        }
+    },
+    "columns": {
+        "name":     ["角色","角色名称",4],
+        "desc":     ["说明","角色说明",5],
+        "key":      ["角色键","角色的键名",4],
+        "auth":     ["权限","此角色拥有的操作权限",4]
+    },
+    "creation": {
+        "name":     "varchar NOT NULL",
+        "desc":     "varchar",
+        "key":      "varchar NOT NULL",
+        "auth":     "varchar NOT NULL DEFAULT '[]'"
+    },
+    "join": {
+        "use": false
+    },
+    "column": {
+        "includes": ["key","name","desc"],
+        "hideintable":  [],
+        "hideinform":  [],
+        "sort": ["key"],
+        "filter": ["auth"],
+        "search": ["name","key"],
+        "time": {},
+        "select": {
+            "auth": {
+                "dynamic": true,
+                "multiple": true,
+                "source": {
+                    "api": "pms/uac/operations/pms/values",
+                    "__table": "usr/auth",
+                    "__label": "[%{id}%] %{name}%",
+                    "__value": "id"
+                }
+            }
+        },
+        "number": {},
+        "switch": [],
+        "json": {
+            "auth": "indexed"
+        },
+        "validator": {},
+        "generator": {}
+    }
+}

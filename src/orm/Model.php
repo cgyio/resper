@@ -524,4 +524,21 @@ class Model extends Record
         }
     }
 
+
+
+    
+    /**
+     * 模型类 静态魔术方法
+     */
+    public static function __callStatic($key, $args)
+    {
+        if (static::$db instanceof Db) {
+            //只有已初始化的 model 模型类，才能执行：
+
+            /**
+             * Model::
+             */
+        }
+    }
+
 }

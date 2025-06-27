@@ -153,6 +153,25 @@ class Configer
         return $val;
     }
 
+    /**
+     * 外部调用 $this->context 赋值
+     * @param Array $conf 要写入的 设置内容
+     * @param Bool $cover 是否覆盖原数据，默认 false 使用 extend 方法合并
+     * @return Bool
+     */
+    public function setCtx($conf=[], $cover=false)
+    {
+        if (!Is::nemarr($conf)) return false;
+        $ctx = $this->context;
+        if ($cover) {
+            $this->context = $conf;
+        } else {
+            $nctx = Arr::extend($ctx, $conf);
+            $this->context = $nctx;
+        }
+        return true;
+    }
+
 
 
     /**

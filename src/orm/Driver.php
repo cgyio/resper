@@ -7,10 +7,16 @@ namespace Cgy\orm;
 
 use Cgy\orm\Db;
 use Cgy\util\Is;
+use Cgy\util\Path;
 use Cgy\util\Cls;
+use Cgy\util\Conv;
 
 class Driver extends Db
 {
+    //数据库配置文件后缀名
+    public static $confExt = ".json";
+
+
     /**
      * !! 必须实现 !!
      */
@@ -65,15 +71,100 @@ class Driver extends Db
 
     /**
      * 创建数据库
+     * !!! 数据库必须初始化完成，在 Orm::$DB[dbkey] 中保存数据库实例
+     * @param String $dbkey 数据库唯一 key
      * @param Array $opt 数据库创建参数
+     *  [
+     *      models => [
+     *          表名 => [
+     *              creation => [
+     *                  字段名 => SQL
+     *              ],
+     *              indexs => [
+     *                  idx_foo => (`foo`) 索引
+     *              ],
+     * 
+     *              rs => [] 重建数据表时，如果传入 原数据记录，则在重建表后，批量写入这些数据
+     *          ]
+     *          ...
+     *      ],
+     *      ... 其他参数
+     *  ]
      * @return Bool
      */
-    public static function create($opt=[])
+    public static function create($dbkey, $opt=[])
     {
+        if (!Is::nemstr($dbkey) || !isset(Orm::$DB[$dbkey])) return false;
+        $db = Orm::$DB[$dbkey];
+
         //... 子类实现
 
         return true;
     }
+
+
+
+    /**
+     * 静态方法
+     */
+
+    /**
+     * 解析 orm 参数中的 dirs 得到真实存在的 数据库路径
+     * @param String $dirs 在预设中指定的 orm 参数中的 dirs 数据库路径
+     * @return Mixed 路径解析成功 则返回真实路径 否则返回 null
+     */
+    public static function parseDirs($dirs)
+    {
+        if (!Is::nemstr($dirs)) return null;
+        $dirs = explode(",", trim($dirs, ","));
+        $dbp = Path::exists($dirs, [
+            "checkDir" => true,
+            "all" => false
+        ]);
+        if (empty($dbp)) $dbp = Path::find("root/library/db", ["checkDir"=>true]);
+        if (empty($dbp)) return null;
+        return $dbp;
+    }
+
+    /**
+     * 在指定的 db 路径下，查找可用的 数据库列表
+     * 在开发阶段 或 使用 MySql 数据库 情况下，可能不存在数据库文件
+     * 因此通过检查 数据库配置文件 来确定 数据库列表
+     * 数据库配置文件应保存在 [dbpath]/config/Dbn.json
+     * 
+     * @param String $path 参数中指定的 数据库路径
+     * @param String $dbtype 不同的数据库类型 sqlite/mysql 
+     * @return Array [ db1, db2, ... ]
+     */
+    public static function findDbnsIn($path, $dbtype="sqlite")
+    {
+        if (!Is::nemstr($path) || !is_dir($path)) return [];
+        $dbns = [];
+        $confp = $path.DS."config";
+        $cfext = static::$confExt;
+        if (!is_dir($confp)) return [];
+        //输入的数据库类型
+        if (!Is::nemstr($dbtype)) $dbtype = "sqlite";
+        $dbtln = strlen($dbtype);
+        //查找路径下 可能存在的 配置文件
+        $ph = @opendir($confp);
+        while(false !== ($dbn = readdir($ph))) {
+            if (in_array($dbn, [".",".."]) || is_dir($confp.DS.$dbn) || strpos($dbn, $cfext)===false) continue;
+            //确定数据库配置文件中指定的 数据库类型 与 传入的 数据库类型一致
+            $cf = $confp.DS.$dbn;
+            $cfa = file_get_contents($cf);
+            $cfa = Conv::j2a($cfa);
+            $dsn = $cfa["dsn"] ?? null;
+            if (!Is::nemstr($dsn) || substr($dsn, 0, $dbtln)!=$dbtype) continue;
+            //保存到 dbns
+            $dbn = str_replace($cfext,"",$dbn);
+            if (!in_array($dbn, $dbns)) $dbns[] = $dbn;
+        }
+        @closedir($ph);
+        //返回找到的 数据库列表
+        return $dbns;
+    }
+
 
 
 

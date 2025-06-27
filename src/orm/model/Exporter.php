@@ -276,13 +276,14 @@ class Exporter
     }
 
     /**
-     * 输出 主表数据 + 所有 join 关联表数据
+     * 输出 主表数据 + getters 数据 + 所有 join 关联表数据
      * @return Array
      */
     public function expAll()
     {
         $rtn = [];
-        $rtn = array_merge($rtn, $this->rs->context);
+        //$rtn = array_merge($rtn, $this->rs->context);
+        $rtn = array_merge($rtn, $this->rs->ctx());
         //关联表
         $jtbs = $this->rs->joined;
         if (empty($jtbs)) return $rtn;

@@ -1,0 +1,84 @@
+{
+    "name": "usr",
+    "title": "账号表",
+    "desc": "记录账号信息数据",
+    "prepare": {
+        "columns": ["uac"],
+        "idx": {
+            "unique": ["uid"],
+            "multiple": [],
+            "normal": ["alias"]
+        }
+    },
+    "columns": {
+        "uid":      ["员工编号","员工唯一编号",4],
+        "alias":    ["别名","员工的别名昵称",3]
+    },
+    "creation": {
+        "uid":      "varchar NOT NULL",
+        "alias":    "varchar"
+    },
+    "join": {
+        "use": false
+    },
+    "column": {
+        "includes": ["uid"],
+        "hideintable":  [],
+        "hideinform":  [],
+        "sort": ["uid"],
+        "filter": [],
+        "search": ["uid"],
+        "time": {},
+        "select": {
+            "role": {
+                "dynamic": true,
+                "multiple": true,
+                "source": {
+                    "table": "app/pms/usr/role",
+                    "__where": {
+                        "name[~]": "超级"
+                    },
+                    "label": "name",
+                    "value": "id",
+                    "__special": [
+                        {"label": "默认用户", "value": 0}
+                    ]
+                }
+            },
+            "auth": {
+                "dynamic": true,
+                "multiple": true,
+                "source": {
+                    "api": "pms/uac/operations/pms/values"
+                }
+            },
+            "__status": {
+                "values": [
+                    {"label": "待入职", "value": "待入职"},
+                    {"label": "试用期", "value": "试用期"},
+                    {"label": "在职", "value": "在职"},
+                    {"label": "休假中", "value": "休假中"},
+                    {"label": "停薪未离职", "value": "停薪未离职"},
+                    {"label": "离职交接中", "value": "离职交接中"},
+                    {"label": "已离职", "value": "已离职"},
+                    {"label": "待定", "value": "待定"}
+                ]
+            }
+        },
+        "file": {
+            "avator": {
+                "inputFilesMaxLength": 0,
+                "uploadTo": "${uid}",
+                "accept": "image/*,.svg",
+                "showListMode": "item"
+            }
+        },
+        "number": {},
+        "switch": [],
+        "json": {},
+        "validator": {},
+        "__generator": {
+            "uid": "uid"
+        }
+    }
+}

@@ -9,9 +9,11 @@
 
 namespace Cgy\orm\model\traits;
 
+use Cgy\orm\model\util\Packager;
 use Cgy\util\Is;
 use Cgy\util\Arr;
 use Cgy\util\Str;
+use Cgy\util\Num;
 
 trait Package 
 {
@@ -46,6 +48,8 @@ trait Package
         if (!Is::nemarr($ctx) || !Is::associate($ctx)) return [];
         if (!Is::nemarr($init) || !Is::associate($init)) return [];
         
+        //package 参数预设
+        $pkg = $init["column"]["package"] ?? [];
         $conf = [
             "package" => [
                 //规格计算必须的 字段名
@@ -63,7 +67,13 @@ trait Package
                 //可用于计算价格的 包含价格信息的 字段
                 "price" => [/*
                     "price"
-                */]
+                */],
+
+                //以最小规格计算数量时，是否必须是整数数量，默认是，即 不会出现 0.5袋 的结果
+                "intunit" => $pkg["intunit"] ?? true,
+
+                //规格计算保留的小数位数，默认 2
+                "dig" => $pkg["dig"] ?? 2,
             ],
 
             //可能修改 getters 参数
@@ -75,9 +85,6 @@ trait Package
         
         //package 字段包括这些
         $ks = array_keys(self::$pkgColumns);
-
-        //package 参数预设
-        $pkg = $init["column"]["package"] ?? [];
         $cols = $pkg["columns"] ?? [];
         $nums = $pkg["num"] ?? [];
         $prcs = $pkg["price"] ?? [];
@@ -130,6 +137,7 @@ trait Package
                 if (!in_array($coln, $ctx["columns"])) continue;
                 $coli = $ctx["column"][$coln];
                 $isnum = in_array($coln, $nums);
+                $mtype = $isnum ? "Num" : "Price";
                 $fn = $coln."Pkg";
                 $fc = [
                     "name" => $fn,
@@ -138,15 +146,38 @@ trait Package
                     "width" => $coli["width"],
                     "type" => [
                         "db" => "varchar",
-                        "js" => "string",
-                        "php" => "String"
+                        "js" => $isnum ? "string" : "object",
+                        "php" => $isnum ? "String" : "Array"
                     ],
                     "isGetter" => true,
                     "origin" => $coln,
-                    "method" => $isnum ? "pkgNumAutoGetters" : "pkgPriceAutoGetters"
+                    "method" => "pkg".$mtype."AutoGetters",
                 ];
                 $conf["getters"][] = $fn;
                 $conf["column"][$fn] = $fc;
+
+                if ($isnum && count($prcs)>0) {
+                    //如果此记录包含价格字段，则针对所有数量字段，增加一个 自动计算总价的 计算字段
+                    $cfn = $coln."Cost";
+                    $cfc = [
+                        "name" => $cfn,
+                        "title" => $coli["title"]."(总价)",
+                        "desc" => $coli["desc"]."，自动计算总价",
+                        "width" => $coli["width"],
+                        "type" => [
+                            "db" => "varchar",
+                            "js" => "object",
+                            "php" => "Array"
+                        ],
+                        "isGetter" => true,
+                        "origin" => $coln,
+                        "method" => "pkgCostAutoGetters",
+                        //保存 价格字段名，price字段数组中的第一个
+                        "price" => $prcs[0],
+                    ];
+                    $conf["getters"][] = $cfn;
+                    $conf["column"][$cfn] = $cfc;
+                }
             }
 
             //返回
@@ -164,10 +195,7 @@ trait Package
      */
     protected function initInsPackage()
     {
-        $this->Packager = [
-            "foo" => "bar"
-        ];
-
+        $this->Packager = new Packager($this);
         return $this;
     }
 
@@ -188,15 +216,7 @@ trait Package
      */
     protected function pkgGetter()
     {
-        $conf = $this->conf->package["columns"];
-        if (empty($conf)) return null;
-        $ks = array_keys($this::$pkgColumns);
-        $pkg = [];
-        foreach ($ks as $ki) {
-            $coli = $conf[$ki];
-            $pkg[$ki] = $this->$coli;
-        }
-        return $pkg["netwt"]."克/".$pkg["unit"]."，".$pkg["minnum"].$pkg["unit"]."/".$pkg["maxunit"];
+        return $this->Packager->pkgString;
     }
 
     /**
@@ -216,17 +236,107 @@ trait Package
         //读取原字段 参数
         $colc = $this->conf->$origin;
 
-        return $data."-pkg-num";
+        //输出字符串，所有品种的数量都是以最小包装形式指定的，因此，使用 unitToStr() 方法
+        return $this->Packager->unitToStr($data, false, true);
     }
-
+    /**
+     * 按规格计算显示价格 
+     * 返回数据：
+     *  [
+     *      "克" => 0,
+     *      "斤" => 0,
+     *      "kg" => 0,
+     *      "str" => ￥23.1000/袋，￥346.5000/箱
+     *  ]
+     */
     protected function pkgPriceAutoGetters($gc)
     {
         $origin = $gc->origin;
-        //读取原字段值 时间戳
+        //读取价格数值
         $data = $this->$origin;
         //读取原字段 参数
         $colc = $this->conf->$origin;
+        //确认 isMoney
+        if ($colc->isMoney!=true) return $data;
+        //字段参数
+        $mc = $colc->money;
+        $prec = $mc["precision"] ?? 4;  //默认保留 4 位小数
+        $icon = $mc["icon"] ?? "￥";
+        //根据品种单位，决定输出内容
+        $pkger = $this->Packager;
+        $isBulk = $pkger->isBulk;   
+        $hasMax = $pkger->hasMaxUnit;
+        $isG = $pkger->unit == $pkger->minunit;
+        $pcs = [];
+        $str = [];
+        $pcs[$pkger->unit] = round($data, $prec);
+        if ($isBulk && $isG) {
+            //散装品种，按 克计算
+            $pcs["斤"] = round($data*500, $prec);
+            $str[] = $icon.Num::roundPad($data*500, $prec)."/斤";
+            $pcs["kg"] = round($data*1000, $prec);
+            $str[] = $icon.Num::roundPad($data*1000, $prec)."/Kg";
+        } else {
+            $pcs[$pkger->unit] = round($data, $prec);
+            $str[] = $icon.Num::roundPad($data, $prec)."/".$pkger->unit;
+        }
+        if ($hasMax) {
+            if ($isBulk && $isG) {
+                //散装品种，按 克计算
+                $nw = $pkger->minnum * $pkger->netwt;
+            } else {
+                $nw = $pkger->minnum;
+            }
+            $pcs[$pkger->maxunit] = round($data*$nw, $prec);
+            $str[] = $icon.Num::roundPad($data*$nw, $prec)."/".$pkger->maxunit;
+        }
 
-        return $data."-pkg-price";
+        if (empty($str)) return $pcs;
+        $pcs["str"] = implode("，", $str);
+        return $pcs;
     }
+    /**
+     * 增对所有标记为数量的字段，增加总价计算字段
+     * 返回数据：
+     *  [
+     *      "cost" => 0,
+     *      "str" => ￥23.1000
+     *  ]
+     */
+    protected function pkgCostAutoGetters($gc)
+    {
+        $origin = $gc->origin;
+        //读取原字段值 数量
+        $data = $this->$origin;
+        //读取原字段 参数
+        $colc = $this->conf->$origin;
+        //价格字段
+        $price = $gc->price ?? null;
+        if (!Is::nemstr($price)) {
+            //如果不包含价格字段，直接返回
+            return 0;
+        }
+        //当前记录的价格数值
+        $pdata = $this->$price;
+        if (!is_numeric($pdata)) {
+            //如果当前记录不包含 价格数据，直接返回
+            return 0;
+        }
+        //计算总价
+        $cost = $data*$pdata;
+        //价格字段设置
+        $pc = $this->conf->$price;
+        $mc = $colc->money;
+        $prec = $mc["precision"] ?? 4;  //默认保留 4 位小数
+        $icon = $mc["icon"] ?? "￥";
+        
+        //返回总价数据
+        return [
+            "cost" => round($cost, $prec),
+            "str" => $icon.Num::roundPad($cost, $prec)
+        ];
+    }
+
+
+
 }

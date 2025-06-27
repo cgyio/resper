@@ -172,6 +172,30 @@ class Orm
         return false;
     }
 
+    /**
+     * 判断是否存在数据模型，通过检查 是否存在模型类定义 来确定模型是否存在
+     * @param String $mdn 数据模型名称（数据表名称）
+     * @return Mixed 存在则返回 ["mcls"=>"模型类全称", "dbn"=>"所在数据库名称"]，不存在返回 false
+     */
+    public function hasModel($mdn)
+    {
+        $conf = $this->config;
+        $dbns = $conf["dbns"] ?? [];
+        $mdcf = $conf["model"] ?? [];
+        $clsp = $mdcf["clsp"] ?? null;
+        if (!Is::nemarr($dbns) || !Is::indexed($dbns) || !Is::nemstr($clsp)) return false;
+        foreach ($dbns as $dbn) {
+            $mcls = $clsp."\\".strtolower($dbn)."\\".ucfirst($mdn);
+            if (class_exists($mcls)) {
+                return [
+                    "mcls" => $mcls,
+                    "dbn" => $dbn
+                ];
+            }
+        }
+        return false;
+    }
+
 
 
     /**
@@ -302,6 +326,15 @@ class Orm
             }
 
             /**
+             * Orm::Tbn()   返回 对应的 Db 实例，同时将 Db->currentModel 指向 Tbn
+             */
+            $hasm = $orm->hasModel($key);
+            if ($hasm!==false && Is::nemstr($hasm["dbn"])) {
+                $dbn = $hasm["dbn"];
+                return Orm::$dbn($key);
+            }
+
+            /**
              * Orm::DbnTbn()    返回 Db 实例，同时将 Db->currentModel 指向 Tbn
              */
             if (Str::beginUp($key)) {
@@ -309,9 +342,12 @@ class Orm
                 $ks = str_replace("-", " ", $ks);
                 $ks = ucwords($ks);
                 $ka = explode(" ", $ks);
-                if (count($ka)<=0) return null;
-                $dbn = array_shift($ka);
-                return Orm::$dbn(...$ka);
+                if (count($ka)>0) {
+                    $dbn = array_shift($ka);
+                    if ($orm->hasDb($dbn)!==false) {
+                        return Orm::$dbn(...$ka);
+                    }
+                }
             }
 
         }

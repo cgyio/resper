@@ -8,6 +8,7 @@
 namespace Cgy\orm;
 
 use Cgy\Orm;
+use Cgy\orm\config\Prepare;
 use Cgy\module\Configer;
 use Cgy\util\Is;
 use Cgy\util\Arr;
@@ -43,6 +44,30 @@ class Config extends Configer
 
         //解析 json 文件，保存到 $this->context
         $this->setConf();
+
+        //数据库初始化时的 参数前置处理，处理模型参数，结果将合并到 $this->context 
+        $path = $this->context["path"] ?? null;
+        $dbname = $this->context["name"] ?? null;
+        if (!Is::nemstr($path) || !Is::nemstr($dbname)) {
+            $pp = new Prepare($this->context);
+        } else {
+            /**
+             * 根据数据库 xpath 查找可能存在的 前置处理类
+             * 自定义前置处理类，必须保存在 数据库路径下的 prepare 文件夹下
+             */
+            $path = str_replace("/library","", $path);
+            $ppcls = NS.str_replace("/","\\", $path)."\\prepare\\".ucfirst($dbname)."Prepare";
+            if (class_exists($ppcls)) {
+                $pp = new $ppcls($this->context);
+            } else {
+                $pp = new Prepare($this->context);
+            }
+        }
+        $ctx = $pp->parse();
+        $this->context = $ctx;
+
+        //执行最终参数处理
+        $this->afterSetConf();
     }
 
     /**
@@ -82,6 +107,9 @@ class Config extends Configer
         return $this;
     }
 
+
+
+
     /**
      * 解析 model 参数
      * 解析 context["model"][$model] 中保存的参数
@@ -89,7 +117,7 @@ class Config extends Configer
      * @param String $model 数据模型(表) name
      * @return Array 解析得到的 model 参数
      */
-    public function parseModelConf($model)
+    public function __parseModelConf($model)
     {
         if (!Is::nemstr($model)) return null;
         $mdcs = $this->context["model"];
@@ -130,7 +158,7 @@ class Config extends Configer
      * @param String $mdcls 数据模型(表) 类全称
      * @return Array 经过处理的 $mdc
      */
-    private function parseModelColumnsConf($mdc, $mdcls)
+    private function __parseModelColumnsConf($mdc, $mdcls)
     {
 
     }

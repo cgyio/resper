@@ -25,13 +25,43 @@ class AppConfig extends Configer
 
         //App 数据库参数
         "orm" => [
+            /**
+             * !! 必须的
+             */
             //是否启用 orm
             "enable" => true,
             //数据库类型
             "type" => "sqlite",
-            //数据库相关路径参数，数据库文件/模型文件 所在路径
+            
+            /**
+             * 数据库相关路径参数，数据库配置文件/模型文件 所在路径
+             * 开发阶段 或 使用MySql数据库 数据库文件可能不存在，因此以数据库配置文件作为数据库存在的依据
+             * 如果在 dirs 路径下存在 config/Foo.json 则表示存在数据库 Foo
+             */
             "dirs" => "root/app/qypms/db",  //必须使用绝对路径
             "models" => "root/model/pms",   //必须使用绝对路径
+
+            /**
+             * !! mysql 数据库 必须的设置
+             * Medoo 库 连接 MySql 的参数
+             */
+            "mysql" => [
+                "host" => "127.0.0.1",
+                "port" => 3306,
+                "database" => "",
+                "username" => "",
+                "password" => "",
+
+                "charset" => "utf8mb4",                 //字符集
+	            "collation" => "utf8mb4_general_ci",    //排序方式
+
+                //更多参数 参考 Medoo 库
+                //...
+            ],
+
+            /**
+             * !! 可选的
+             */
             //默认必须加载的数据库模型(表) 名称
             "required" => [
                 //"usr"

@@ -296,19 +296,6 @@ class Db
         //var_dump($mdcls);
         if (class_exists($mdcls)) return $mdcls;
         return false;
-
-        //首先，在预定义的位置查找 model 类文件，设置在 app/appname/library/Config.php 中定义 model 项目，可以是任意路径
-        /*$mdps = $this->resper->conf["orm"]["model"] ?? [];
-        if (Is::nemstr($mdps)) $mdps = Arr::mk($mdps);
-        if (!Is::nemarr($mdps)) $mdps = Arr::mk(DIR_MODEL);
-        $mdp = Path::exists($)
-
-        //在当前 Resper 实例所在路径下 查找 model 类
-        $mdcls = $this->resper->cls("model/".$dbn."/".ucfirst($mdn));
-        if (empty($mdcls)) return false;
-        //在数据库中查找是否实际存在表
-        if (!$this->hasTable($model)) return false;
-        return $mdcls;*/
     }
 
     /**
@@ -487,14 +474,6 @@ class Db
      * medoo 操作
      */
 
-    //创建 medoo 实例
-    /*protected function medooConnect($opt=[])
-    {
-        $opt = arr_extend($this->connectOptions, $opt);
-        $this->_medoo = new Medoo($opt);
-        return $this;
-    }*/
-
     /**
      * get medoo instance  or  call medoo methods
      * @param String $method
@@ -507,6 +486,44 @@ class Db
         if (!Is::nemstr($method)) return $this->_medoo;
         if (method_exists($this->_medoo, $method)) return $this->_medoo->$method(...$params);
         return null;
+    }
+
+    /**
+     * for dev
+     * 开发阶段 安装数据库(表)/重建数据库(表)
+     * 在数据库参数修改后（表结构修改后）必须执行此方法
+     * !!! 此操作必须在数据库初始化完成后 (数据库参数已完全加载)
+     * @param String $model 要重建某个数据表 表名称，默认 null 重建所有表
+     * @param Bool $withRs 重建表结构时，是否保留原数据记录，默认 true
+     * @return Bool
+     */
+    public function install($model=null, $withRs=true)
+    {
+        $conf = $this->config->ctx();
+        $mds = $conf["models"] ?? [];
+        $mdc = $conf["model"] ?? [];
+        if (Is::nemstr($model) && !in_array($model, $mds)) return false;
+        if (Is::nemstr($model)) {
+            $mds = [ $model ];
+        }
+        //生成 $db::create() 方法参数
+        $opt = [
+            "models" => []
+        ];
+        for ($i=0;$i<count($mds);$i++) {
+            $mdn = $mds[$i];
+            if (!isset($mdc[$mdn]) || !Is::nemarr($mdc[$mdn])) continue;
+            $mdci = $mdc[$mdn];
+            $opt["models"][$mdn] = [
+                "creation" => $mdci["creation"],
+                "indexs" => $mdci["column"]["indexs"] ?? [],
+                "withrs" => $withRs
+            ];
+        }
+        if (empty($opt["models"])) return false;
+        //调用 $db::create() 方法
+        $res = static::create($this->key, $opt);
+        return $res;
     }
 
     /**

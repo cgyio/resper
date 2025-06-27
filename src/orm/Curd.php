@@ -256,6 +256,8 @@ class Curd
                         return $this;
                     }
                 }
+
+                return $this;
             }
 
         }
@@ -346,7 +348,7 @@ class Curd
             //销毁当前 curd 操作
             $unset = true;
             if (Is::nemarr($args) && is_bool($args[0])) {
-                $unset = array_unshift($args);
+                $unset = array_shift($args);
             }
             if ($unset) $this->unset();
             
@@ -362,7 +364,7 @@ class Curd
      * @param String $sk 关键字，可有多个，逗号隔开
      * @return ModelSet  or  null
      */
-    public function __search($sk="")
+    /*public function __search($sk="")
     {
         $wp = $this->whereParser;
         if (!$wp instanceof WhereParser) return $this->unset();
@@ -373,7 +375,7 @@ class Curd
         //执行 medoo 查询
         $rst = $this->select();
         return $rst;
-    }
+    }*/
 
     /**
      * 通过 Db->Model->method 调用 curd 操作时

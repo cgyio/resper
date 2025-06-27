@@ -179,7 +179,11 @@ class Record
     {
         $diff = $this->diff();
         if (empty($diff)) return $this;
-        
+
+        //TODO: 实现写入数据库操作
+        //...
+
+        return $this;
     }
 
     /**

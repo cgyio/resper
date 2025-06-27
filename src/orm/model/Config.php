@@ -65,6 +65,7 @@ class Config
         //indexed
         "includes"  => "indexed",
         "switch"    => "indexed",
+        "unique"    => "indexed",   //字段唯一属性
         
         //associate
         "time"      => "associate",
@@ -183,6 +184,11 @@ class Config
      */
     public function __get($key)
     {
+        /**
+         * $config->ctx  -->  $config->context
+         */
+        if ($key=="ctx") return $this->context;
+        
         /**
          * $config->foo  -->  $config->context["foo"]
          */
@@ -512,6 +518,7 @@ class Config
         //记录特殊字段
         if ($oconf["isPk"]==true) $cf = $func($fdn, "pk", $cf);
         if ($oconf["isId"]==true) $cf = $func($fdn, "id", $cf);
+        if ($oconf["isUnique"]==true) $cf = $func($fdn, "unique", $cf);
         if ($oconf["type"]["php"]=="JSON") $cf = $func($fdn, "json", $cf);
         if ($oconf["isIncludes"]==true) $cf = $func($fdn, "includes", $cf);
         if ($oconf["isTime"]==true) $cf = $func($fdn, "time", $cf);
@@ -869,6 +876,10 @@ class Config
         $conf["table"] = lcfirst($conf["name"]);
         $conf["name"] = ucfirst($conf["name"]);
 
+        //indexs 索引
+        $idxs = $init["column"]["indexs"] ?? [];
+        $conf["indexs"] = $idxs;
+
         //includes 每次查询必须包含字段
         $incs = $conf["includes"] ?? [];
         $fds = $this->context["columns"];
@@ -879,6 +890,8 @@ class Config
         if (!empty($sincs)) $incs = array_merge($sincs, $incs);
         if (!empty($gids)) $incs = array_merge($gids, $incs);
         if (!empty($ids)) $incs = array_merge($ids, $incs);
+        //extra/enable 字段必须包含
+        if (in_array("extra", $fds) && !in_array("extra", $incs)) $incs[] = "extra";
         if (in_array("enable", $fds) && !in_array("enable", $incs)) $incs[] = "enable";
         $incs = array_merge(array_flip(array_flip($incs)));     //去重
         $conf["includes"] = $incs;
