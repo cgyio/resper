@@ -43,7 +43,7 @@ class Exporter
         $this->conf = $this->model::$config;
 
         //对 $rs->context 进行初始处理
-        $this->initContext();
+        //$this->initContext();
     }
 
     /**
@@ -51,7 +51,7 @@ class Exporter
      * 对于特殊 type 的 字段值 进行 处理
      * @return Exporter $this
      */
-    public function initContext()
+    public function __initContext()
     {
         //主表
         $fds = $this->conf->columns;
@@ -73,7 +73,7 @@ class Exporter
      * 增加一个 field_exp 字段 输出 format 日期/时间
      * @return Exporter $this
      */
-    protected function initTimeFieldVal()
+    protected function __initTimeFieldVal()
     {
         $spec = $this->conf->specialFields;
         $fds = $spec["time"] ?? [];
@@ -93,7 +93,7 @@ class Exporter
      * 增加一个 field_exp 字段 输出 ￥100.00 金额
      * @return Exporter $this
      */
-    protected function initMoneyFieldVal()
+    protected function __initMoneyFieldVal()
     {
         $spec = $this->conf->specialFields;
         $fds = $spec["money"] ?? [];

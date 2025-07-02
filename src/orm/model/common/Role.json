@@ -37,10 +37,7 @@
                 "dynamic": true,
                 "multiple": true,
                 "source": {
-                    "api": "pms/uac/operations/pms/values",
-                    "__table": "usr/auth",
-                    "__label": "[%{id}%] %{name}%",
-                    "__value": "id"
+                    "api": "uac/authvalues"
                 }
             }
         },

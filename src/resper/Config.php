@@ -3,15 +3,24 @@
  * cgyio/resper 通用预设参数
  * 在 index.php 中，可通过 Resper::start([...]) 修改
  * 
- * 参数在初始化完成后，都被定义为 全局常量
+ * 可以自动配置 App/Module/自定义Resper 类型的 响应者类的参数
+ * 处理后的参数保存在 $config->context[ app/appName | module/moduleName | 自定义Resper名称 ] 
+ * 各类型参数配置器实例保存在 $config->[ app | module | resper ]->[name]
  * 
+ * 其他全局参数在初始化完成后，都被定义为 全局常量
  */
 
 namespace Cgy;
 
 use Cgy\Resper;
 use Cgy\module\Configer;
+use Cgy\module\configer\ResperConfig;
 use Cgy\Event;
+use Cgy\util\Is;
+use Cgy\util\Arr;
+use Cgy\util\Str;
+use Cgy\util\Path;
+use Cgy\util\Cls;
 
 class Config extends Configer 
 {
@@ -153,6 +162,14 @@ class Config extends Configer
             */
         ],
 
+        /**
+         * 可手动定义 额外的 response 相应参数
+         * !! 在 Resper::start([ ... ]) 写入自定义参数
+         */
+        "response" => [
+
+        ],
+
     ];
 
     /**
@@ -165,6 +182,9 @@ class Config extends Configer
         "ext" => ".php",
     ];
 
+    //各 resper 的 configer 实例
+    public $resper = null;
+
     //各 module 的 configer 实例
     public $module = null;
 
@@ -173,7 +193,7 @@ class Config extends Configer
 
     /**
      * 在 应用用户设置后 执行
-     * !! 子类可覆盖
+     * !! 覆盖父类
      * @return $this
      */
     public function afterSetConf()
@@ -199,7 +219,7 @@ class Config extends Configer
         //定义 固定常量
         self::def($this->defines);
         //定义 系统路径常量
-        $pre = cgy_path_fix(__DIR__.DS."..".DS."..".DS."..".DS."..".DS."..");
+        $pre = Path::fix(__DIR__.DS."..".DS."..".DS."..".DS."..".DS."..");
         $vdp = $pre.DS."vendor";
         $cgp = $vdp.DS."cgyio";
         $rep = $cgp.DS."resper".DS."src";
@@ -213,7 +233,7 @@ class Config extends Configer
         ];
         self::def($path);
         //路径常量合并到 $defines
-        $this->defines = cgy_arr_extend($this->defines, $path);
+        $this->defines = Arr::extend($this->defines, $path);
         return $this;
     }
 
@@ -267,6 +287,8 @@ class Config extends Configer
     public function initConf()
     {
         $ctx = $this->context;
+        //自定义的 Resper 响应者类列表
+        $respers = [];
         foreach ($ctx as $k => $v) {
             //dir 已定义
             if ($k=="dir") continue;
@@ -274,12 +296,27 @@ class Config extends Configer
             if (method_exists($this, $m)) {
                 //定义了设置项处理方法
                 $this->$m($v);
+            } else if (Resper::has($k)) {
+                //某个 自定义 Resper 类的 预设参数
+                //建立 Resper configer 实例
+                $cfg = new ResperConfig($v);
+                $ctx = $cfg->ctx();
+                //将 处理完的参数 写入 context
+                $this->context = Arr::extend($this->context, [
+                    $k => $ctx
+                ]);
+                //保存 ResperConfig 实例
+                $respers[$k] = $cfg;
             } else {
                 //未定义处理方法，则默认定义为 常量
                 //以 item 名称作为常量前缀
                 $k = strtolower($k);
                 self::def($v, $k);
             }
+        }
+        if (Is::nemarr($respers)) {
+            //所有自定义 resper 响应者类的 configer 实例，保存到 $this->resper
+            $this->resper = (object)$respers;
         }
         return $this;
     }
@@ -299,7 +336,7 @@ class Config extends Configer
         if (isset($conf["ini_set"])) {
             //ini_set
             $ist = $conf["ini_set"];
-            if (cgy_is_nemarr($ist)) {
+            if (Is::nemarr($ist)) {
                 foreach ($ist as $k => $v) {
                     ini_set($k, $v);
                 }
@@ -331,17 +368,17 @@ class Config extends Configer
             //模块名 必须小写
             $mdn = strtolower($md);
             //获取 module/Config 设置类
-            $cls = cgy_cls_find("module/".$mdn."/Config");
+            $cls = Cls::find("module/".$mdn."/Config");
             if (empty($cls)) continue;
             //读取用户设置项
             $opt = $this->ctx("module/".$mdn);
-            if (!cgy_is_nemarr($opt)) {
+            if (!Is::nemarr($opt)) {
                 $opt = [];
             }
             //建立 module configer 实例
             $cfg = new $cls($opt);
             //将 module 参数 写入 context
-            $this->context = cgy_arr_extend($this->context, [
+            $this->context = Arr::extend($this->context, [
                 "module" => [
                     $mdn => $cfg->ctx()
                 ]
@@ -382,17 +419,17 @@ class Config extends Configer
             $apn = strtolower($app);
             if (!file_exists($appd.DS.ucfirst($apn).EXT)) continue;
             //获取 App/apn/Config 设置类
-            $cls = cgy_cls_find("App/".$apn."/Config");
+            $cls = Cls::find("App/".$apn."/Config");
             if (empty($cls)) continue;
             //读取用户设置项
             $opt = $this->ctx("app/".$apn);
-            if (!cgy_is_nemarr($opt)) {
+            if (!Is::nemarr($opt)) {
                 $opt = [];
             }
             //建立 app configer 实例
             $cfg = new $cls($opt);
             //将 app 参数 写入 context
-            $this->context = cgy_arr_extend($this->context, [
+            $this->context = Arr::extend($this->context, [
                 "app" => [
                     $apn => $cfg->ctx()
                 ]
@@ -419,7 +456,7 @@ class Config extends Configer
      */
     public function runtimeSet($opt = [])
     {
-        $this->context = cgy_arr_extend($this->context, $opt);
+        $this->context = Arr::extend($this->context, $opt);
         return $this;
     }
 

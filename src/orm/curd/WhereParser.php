@@ -97,6 +97,39 @@ class WhereParser extends Parser
 
     /**
      * 构造 where 参数
+     * 同时设置多个字段的 查询值
+     * 参数形式：
+     *      whereCols( [col1,col2], "~", val) === whereCols("OR", [col1,col2], "~", val)
+     *      whereCols("AND", [col1,col2], val) === whereCol1(val)->whereCol2(val)
+     */
+    public function whereCols(...$args)
+    {
+        if (empty($args)) return $this;
+        $where = [];
+        $aor = Is::nemstr($args[0]) ? array_shift($args) : "OR";
+        if (!in_array($args[0], ["AND", "OR"])) $aor = "OR";
+        $cols = Is::nemarr($args[0]) ? array_shift($args) : [];
+        if (!Is::indexed($cols) || empty($cols)) return $this;
+        foreach ($cols as $i => $coln) {
+            if ($aor=="AND") {
+                $this->whereCol($coln, ...$args);
+            } else {
+                if (count($args) == 1) {
+                    $where[$coln] = $args[0];
+                } else {
+                    $where[$coln."[".$args[0]."]"] = $args[1];
+                }
+            }
+        }
+
+        if ($aor=="AND") return $this;
+        return $this->setParam([
+            "OR #where cols" => $where
+        ]);
+    }
+
+    /**
+     * 构造 where 参数
      * 筛选 某些字段
      * [
      *      "column" => [

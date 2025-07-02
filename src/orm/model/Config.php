@@ -17,6 +17,7 @@ namespace Cgy\orm\model;
 use Cgy\Orm;
 use Cgy\orm\Db;
 use Cgy\orm\Model;
+use Cgy\orm\model\config\AutoGettersCreator;
 use Cgy\util\Is;
 use Cgy\util\Arr;
 use Cgy\util\Str;
@@ -175,6 +176,17 @@ class Config
         if (!Is::nemarr($conf)) return $this;
         $this->context = Arr::extend($this->context, $conf);
         return $this;
+    }
+
+    /**
+     * 外部获取 context 内容
+     * @param String $key 按项目 key 获取 context 内容
+     * @return Mixed
+     */
+    public function ctx($key=null)
+    {
+        if (!Is::nemstr($key)) return $this->context;
+        return Arr::find($this->context, $key);
     }
 
     /**
@@ -690,7 +702,7 @@ class Config
      * 
      * 则有计算字段 fooBar
      * 
-     * 针对 isTime / isMoney 字段，自动添加 输出字符串形式的计算字段 ***Str
+     * 针对 一些特殊类型的字段，自动添加 计算字段
      * 
      * @param Array $init json 中定义的参数
      * @return Config $this
@@ -750,28 +762,22 @@ class Config
             }
         }
 
-        //针对 isTime / isMoney 字段 自动定义计算字段 ***Str
-        $colc = $this->context["column"] ?? [];
-        foreach ($colc as $coln => $coli) {
-            if ($coli["isTime"]!=true && $coli["isMoney"]!=true) continue;
-            $fn = $coln."Str";
-            $fc = [
-                "name" => $fn,
-                "title" => $coli["title"],
-                "desc" => $coli["desc"]." (文字形式)",
-                "width" => $coli["width"],
-                "type" => [
-                    "db" => "varchar",
-                    "js" => "string",
-                    "php" => "String"
-                ],
-                "isGetter" => true,
-                "origin" => $coln,
-                "method" => $coli["isTime"]==true ? "timeStrAutoGetters" : "moneyStrAutoGetters"
-            ];
-            $conf["getters"][] = $fn;
-            $conf["column"][$fn] = $fc;
-        }
+        //针对 特殊类型的字段 自动定义计算字段 ***Str
+        //查找 AutoGettersCreator 类中所有 createFoobarAutoGetters 方法
+        $cags = Cls::methodNames(AutoGettersCreator::class, "static,public", function($mi) {
+            $mn = $mi->name;
+            return substr($mn, 0, 6)==="create" && substr($mn, -11)==="AutoGetters";
+        });
+        if (Is::nemarr($cags) && Is::indexed($cags)) {
+            $colc = $this->context["column"] ?? [];
+            foreach ($colc as $coln => $coli) {
+                //分别调用 createFoobarAutoGetters 方法
+                foreach ($cags as $i => $cag) {
+                    //传入 $conf 参数，返回值是经过修改的 $conf
+                    $conf = AutoGettersCreator::$cag($coln, $coli, $conf);
+                }
+            }
+        } 
 
         return $this->setContext($conf);
     }

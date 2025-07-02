@@ -1,7 +1,7 @@
 <?php
 /**
- * resper 框架 App config 基类
- * 任意 App 类的 config 类继承自此类
+ * resper 框架 Module config 基类
+ * 任意 Module 类的 config 类继承自此类
  */
 
 namespace Cgy\module\configer;
@@ -15,10 +15,10 @@ use Cgy\util\Str;
 use Cgy\util\Is;
 use Cgy\util\Path;
 
-class AppConfig extends BaseConfig 
+class ModuleConfig extends BaseConfig 
 {
     /**
-     * 定义统一的 App 应用类预设数据结构
+     * 定义统一的 Module 类预设数据结构
      * !! 子类可以覆盖
      */
     protected $init = [

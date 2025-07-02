@@ -17,8 +17,16 @@ use Cgy\util\Arr;
 use Cgy\util\Num;
 use Cgy\util\Cls;
 
+use Cgy\orm\model\traits\SpecialColAutoGetter;
+
 class Record 
 {
+    /**
+     * 应用 模型实例的 一些通用 功能
+     */
+    //增加一些特殊字段的 AutoGetter 方法，如：time / money 等
+    use SpecialColAutoGetter;
+
     /**
      * 数据表(模型) 实例参数
      */
@@ -261,8 +269,8 @@ class Record
         }
 
         /**
-         * $rs->Model / $rs->model / $rs->Tablename
-         * 相当于 $db->Model
+         * $rs->Model / $rs->model / $rs->Mdn
+         * 相当于 $db->Mdn
          */
         if (strtolower($key) == "model" || strtolower($key) == strtolower(static::$config->name)) {
             $tbn = ucfirst(static::$config->name);
@@ -377,64 +385,4 @@ class Record
         return $this->exporter->expAll();
     }
 
-
-
-    /**
-     * ***AutoGetters 方法
-     */
-
-    /**
-     * timeStrAutoGetters 时间戳输出字符串
-     * @param Object $gc auto getter 参数
-     * @return String
-     */
-    protected function timeStrAutoGetters($gc)
-    {
-        $origin = $gc->origin;
-        //读取原字段值 时间戳
-        $data = $this->$origin;
-        //读取原字段 参数
-        $colc = $this->conf->$origin;
-        //确认 isTime
-        if ($colc->isTime!=true) return $data;
-
-        $tc = $colc->time;
-        $ttp = $tc["type"];
-        //判断是否 时间区间
-        $range = substr($ttp, -6) == "-range";
-        $ttp = str_replace("-range","",$ttp);
-        $fo = $ttp=="datetime" ? "Y-m-d H:i:s" : "Y-m-d";
-        if ($range) {
-            if (!Is::indexed($data)) return [];
-            return array_map(function($i) use ($fo) {
-                if (!is_numeric($i) || !is_int($i*1)) return "";
-                return date($fo, $i*1);
-            }, $data);
-        } else {
-            if (!is_numeric($data) || !is_int($data*1)) return "";
-            return date($fo, $data*1);
-        }
-    }
-
-    /**
-     * moneyStrAutoGetters 金额输出为字符串
-     * 3.1415926  -->  ￥3.1416
-     * @param Object $gc auto getter 参数
-     * @return String
-     */
-    protected function moneyStrAutoGetters($gc)
-    {
-        $origin = $gc->origin;
-        //读取原字段值 时间戳
-        $data = $this->$origin;
-        //读取原字段 参数
-        $colc = $this->conf->$origin;
-        //确认 isMoney
-        if ($colc->isMoney!=true) return $data;
-        //金额 转为 字符串
-        $mc = $colc->money;
-        $prec = $mc["precision"];
-        $data = Num::roundPad($data, $prec);
-        return $mc["icon"].$data;
-    }
 }

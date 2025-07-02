@@ -81,6 +81,16 @@ class Response
         $this->request = Resper::$request;
         //Resper 实例
         $this->resper = Resper::$resper;
+
+        /**
+         * !! 创建响应实例时，响应者实例 和 请求实例 必须都已创建
+         * 否则 作为框架错误（生产环境中 不应存在此错误），直接返回错误信息，并终止响应
+         */
+        if (!$this->request instanceof Request || !$this->resper instanceof Resper) {
+            header("Content-Type: text/html; charset=utf-8");
+            echo "Resper Framework Error!";
+            exit;
+        }
         
         //创建响应头
         $this->header = new Header();

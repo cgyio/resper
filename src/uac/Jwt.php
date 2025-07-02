@@ -54,38 +54,101 @@
  * 
  */
 
-namespace Atto\Orm;
+namespace Cgy\uac;
 
-use Atto\Box\Request;
-use Atto\Box\Uac;
-use Atto\Box\Db;
+use Cgy\Resper;
+use Cgy\Request;
+use Cgy\Uac;
+use Cgy\Orm;
+use Cgy\util\Is;
+use Cgy\util\Arr;
+use Cgy\util\Conv;
+use Cgy\util\Path;
+use Cgy\util\Cls;
 
 class Jwt 
 {
-    //有效期时长，8 hours
-    public static $expireIn = 8*60*60;  
-    //默认加密算法 alg
-    public static $alg = "HS256";
+    /**
+     * 依赖
+     */
+    //当前 resper 响应者关联的 uac 权限控制类实例
+    public $uac = null;
 
+    /**
+     * jwt 参数，在 uac 预设参数中 可自定义 jwt 项
+     */
+    //有效期时长，8 hours
+    public $expireIn = 8*60*60;  
+    //默认加密算法 alg
+    public $alg = "HS256";
     //可自定义 headers 字段名，默认 Authorization
     public $requestHeader = "Authorization";
 
-    //自定义 jwt-secret.json 的保存位置，默认 [webroot|app/appname]/accounts
-    public $secretDir = "app/db/accounts";
+    //自定义 jwt-secret.json 的保存位置，默认 [webroot|app/appname]/library/jwt
+    public $secretDir = "root/library/jwt";
+
+    //请求来源解析类 类全称 或 null
+    public $audGetter = null;
+    //如果未获取到 请求来源，则使用此默认来源
+    public $dftAud = "public";
+
+    /**
+     * 构造
+     */
+    public function __construct($uac)
+    {
+        if (!$uac instanceof Uac) return null;
+        //设置参数
+        $conf = $uac->config["jwt"] ?? [];
+        if (isset($conf["expire"])) $this->expireIn = $conf["expire"];
+        if (isset($conf["header"])) $this->requestHeader = $conf["header"];
+        if (isset($conf["alg"])) $this->alg = $conf["alg"];
+        if (isset($conf["dftAudience"])) $this->dftAud = $conf["dftAudience"];
+
+        //处理密钥文件路径，如果定义的不存在，则使用默认的 resper/uac/jwt 框架默认位置（此路径一定存在）
+        if (isset($conf["secret"]) && Is::nemstr($conf["secret"])) {
+            $sdir = Path::find($conf["secret"], ["checkDir"=>true]);
+        } else {
+            $sdir = Path::find($this->secretDir, ["checkDir"=>true]);
+        }
+        if (is_dir($sdir)) {
+            $this->secretDir = $sidr;
+        } else {
+            $this->secretDir = Path::find("resper/uac/jwt", ["checkDir"=>true]);
+        }
+
+        //处理 请求来源解析类/方法
+        $audGetter = $conf["audience"] ?? "";
+        if (Is::nemstr($audGetter) || class_exists($audGetter)) {
+            $this->audGetter = $audGetter;
+        } else {
+            $this->audGetter = null;
+        }
+
+    }
 
     /**
      * 从 Request Headers 中解析当前请求的来源
      * 可由子类覆盖
      * @return String 解析得到的 audience 字符串
      */
-    public function getAudienceFromRequestHeader()
+    public function getAudience()
     {
-        //通用解析方法，子类可覆盖
-        //解析 Request::$current->headers["Referer"]，为空则返回 null
-        $req = Request::$current;
-        $ref = isset($req->headers["Referer"]) ? $req->headers["Referer"] : null;
-        if (!is_notempty_str($ref)) return "public";
-        return strtolower(explode("/", explode("://", $ref)[1])[0]);
+        //检查是否自定义了 请求来源解析类
+        $audGetter = $this->audGetter;
+        if (!is_null($audGetter)) {
+            //调用自定义 请求来源解析类
+            $ag = new $audGetter();
+            //请求来源解析类 必须实现 getAudience 方法
+            $aud = $ag->getAudience();
+            //释放资源
+            $ag = null;
+            return Is::nemstr($aud) ? $aud : $this->dftAud;
+        }
+        //通用解析方法，调用 Request::audience() 
+        $aud = Request::audience();
+        if (!Is::nemarr($aud) || (isset($aud["audience"]) && !Is::nemstr($aud["audience"]))) return $this->dftAud;
+        return $aud["audience"];
     }
 
     /**
@@ -95,29 +158,29 @@ class Jwt
      * @param Array $extra 要写入 json 的更多数据，!!! 必须包含 name 字段 !!!
      * @return String secret 密钥
      */
-    public function createSecretByAud($aud=null, $account=[])
+    protected function createSecretByAud($aud=null, $account=[])
     {
-        $aud = is_notempty_str($aud) ? $aud : $this->getAudienceFromRequestHeader();
+        $aud = Is::nemstr($aud) ? $aud : $this->getAudience();
         $base_aud = base64_encode($aud);
         $secretDir = $this->secretDir;
         $sfn = $secretDir.DS.$base_aud.".json";
-        $sf = path_find($sfn);
+        $sf = Path::find($sfn);
         if (file_exists($sf)) {
             //已经存在，检查 account 数据是否已经包含在 json 中
-            $sn = j2a(file_get_contents($sf));
+            $sn = Conv::j2a(file_get_contents($sf));
             //未指定 account 直接退出
-            if (empty($account) || !is_notempty_str($account["name"])) return $sn["secret"];
+            if (!Is::nemarr($account) || !Is::nemstr($account["name"])) return $sn["secret"];
             $acname = $account["name"];
             //account 数据保存在 account 字段下
-            $ac = $sn["account"] ?? null;
+            $ac = $sn["account"] ?? [];
             if (empty($ac)) $sn["account"] = [];
             if (isset($ac[$acname])) {
-                $sn["account"][$acname] = arr_extend($ac[$acname], $account);
+                $sn["account"][$acname] = Arr::extend($ac[$acname], $account);
             } else {
                 $sn["account"][$acname] = $account;
             }
             //写入
-            file_put_contents($sf, a2j($sn));
+            file_put_contents($sf, Conv::a2j($sn));
             return $sn["secret"];
         } else {
             //不存在此 audience 的 secret，创建
@@ -129,11 +192,11 @@ class Jwt
                 "secret" => $secret,
                 "account" => []
             ];
-            if (!empty($account) && is_notempty_str($account["name"])) {
+            if (Is::nemarr($account) && Is::nemstr($account["name"])) {
                 $acname = $account["name"];
                 $sn["account"][$acname] = $account;
             }
-            @fwrite($sfh, a2j($sn));
+            @fwrite($sfh, Conv::a2j($sn));
             @fclose($sfh);
             return $sn["secret"];
         }
@@ -146,15 +209,15 @@ class Jwt
      */
     protected function getSecretByAud($aud=null)
     {
-        $aud = is_notempty_str($aud) ? $aud : $this->getAudienceFromRequestHeader();
+        $aud = Is::nemstr($aud) ? $aud : $this->getAudience();
         $base_aud = base64_encode($aud);
         $secretDir = $this->secretDir;
         $sfn = $secretDir.DS.$base_aud.".json";
         //var_dump($sfn);
-        $sf = path_find($sfn);
+        $sf = Path::find($sfn);
         if (!empty($sf)) {
             //找到保存的 json
-            $sn = j2a(file_get_contents($sf));
+            $sn = Conv::j2a(file_get_contents($sf));
             return $sn["secret"];
         }
         //未找到 json 则创建
@@ -168,13 +231,13 @@ class Jwt
     public function getToken()
     {
         $req = Request::$current;
-        //var_dump($req->headers);
+        //Request 请求还未实例化，返回 null
         if (empty($req)) return null;
         $hd = $this->requestHeader;
-        if (!isset($req->headers[$hd]) || empty($req->headers[$hd])) {
-            return null;
-        }
-        return $req->headers[$hd];
+        $hd = ucfirst($hd);
+        $tk = $req->header->$hd;
+        if (Is::nemstr($tk)) return $tk;
+        return null;
     }
 
     /**
@@ -186,13 +249,13 @@ class Jwt
      */
     public function generate($usrdata = [], $audManual = null)
     {
-        $alg = self::$alg;
-        $aud = empty($audManual) ? $this->getAudienceFromRequestHeader() : $audManual;
+        $alg = $this->alg;
+        $aud = !Is::nemstr($audManual) ? $this->getAudience() : $audManual;
         $secret = $this->getSecretByAud($aud);
         $req = Request::$current;
-        $hds = $req->headers;
+        $hds = $req->header;
         $t = time();
-        $expt = $t + self::$expireIn;
+        $expt = $t + $this->expireIn;
 
         $jwt_header = [
             "typ" => "JWT",
@@ -200,7 +263,7 @@ class Jwt
         ];
 
         $jwt_payload = [
-            "iss" => $hds["Host"],
+            "iss" => $hds->Host,
             "aud" => $aud,
             "iat" => $t,
             "nbf" => $t,
@@ -208,8 +271,8 @@ class Jwt
             "usr" => $usrdata
         ];
 
-        $hp = base64_encode(a2j($jwt_header)).".".base64_encode(a2j($jwt_payload));
-        $jwt_signature = self::sign($alg, $hp, $secret);
+        $hp = base64_encode(Conv::a2j($jwt_header)).".".base64_encode(Conv::a2j($jwt_payload));
+        $jwt_signature = $this->sign($alg, $hp, $secret);
 
         $token = $hp.".".$jwt_signature;
         return [
@@ -222,46 +285,54 @@ class Jwt
 
     /**
      * 验证前端传回的 JWT Token
-     * @param String[] $apis 要验证权限的 api(s)  !!! 不需要
      * @return Array [ "success" => true, "payload" => usrdata ] or [ "success" => false, "msg" => "error msg", "payload" => null ]
      *              or Bool
      */
-    public function validate(/*...$apis*/)
+    public function validate()
     {
-        /*$req = Request::$current;
-        if (!isset($req->headers["Authorization"]) || empty($req->headers["Authorization"])) {
-            return self::returnValidateResult("emptyToken");
-        }
-        $token = $req->headers["Authorization"];*/
         $token = $this->getToken();
         //var_dump($token);
-        if (empty($token)) return $this->returnValidateResult("emptyToken");
+
+        //空 token 说明还未登录
+        if (!Is::nemstr($token)) return $this->rtnValiRes("emptyToken");
+
+        //解析 token
         $ta = explode(".", $token);
-        $jwt_header = j2a(base64_decode($ta[0]));
+        $jwt_header = Conv::j2a(base64_decode($ta[0]));
         $alg = $jwt_header["alg"];
-        $jwt_payload = j2a(base64_decode($ta[1]));
+        $jwt_payload = Conv::j2a(base64_decode($ta[1]));
         $usrdata = isset($jwt_payload["usr"]) ? $jwt_payload["usr"] : null;
         $jwt_signature = $ta[2];
         $hp = $ta[0].".".$ta[1];
-        $aud = $this->getAudienceFromRequestHeader();
+        $aud = $this->getAudience();
         //var_dump($aud);
+
+        //来源不一致，说明 token 可能被篡改
         if (!isset($jwt_payload["aud"]) || $jwt_payload["aud"]!=$aud) {
-            return $this->returnValidateResult("differentAudience", [
+            return $this->rtnValiRes("differentAudience", [
                 "token_aud" => $jwt_payload["aud"],
                 "real_aud" => $aud
             ]);
         }
+
+        //decode 解码 token
         $secret = $this->getSecretByAud($aud);
         //var_dump($secret);
-        $signature = self::sign($alg, $hp, $secret);
+        $signature = $this->sign($alg, $hp, $secret);
+
+        //签名不一致，说明 token 可能被篡改
         if ($jwt_signature !== $signature) {
-            return $this->returnValidateResult("errorToken");
+            return $this->rtnValiRes("errorToken");
         }
+
+        //token 过期
         $t = time();
         if ($t > $jwt_payload["exp"]) {
-            return $this->returnValidateResult("expired");
+            return $this->rtnValiRes("expired");
         }
-        return $this->returnValidateResult("success", $usrdata);
+
+        //token 解析成功，返回其中包含的 用户数据 
+        return $this->rtnValiRes("success", $usrdata);
     }
 
     /**
@@ -270,7 +341,7 @@ class Jwt
      * @param Array | Mixed $payload return usrdata if success
      * @return Array
      */
-    protected function returnValidateResult($status = "success", $payload = [])
+    protected function rtnValiRes($status = "success", $payload = [])
     {
         $res = [
             "success" => "Token 验证成功",

@@ -7,6 +7,7 @@
 namespace Cgy;
 
 use Cgy\Response;
+use Cgy\Log;
 use Cgy\util\Is;
 use Cgy\util\Arr;
 use Cgy\util\Path;
@@ -230,6 +231,15 @@ class Error
 				$err->setData();
 			}
 
+			//记录 error 日志
+			Log::error(
+				$err->title."：".$err->msg,
+				[
+					"file" => $err->file,
+					"line" => $err->line
+				]
+			);
+
             if ($err->mustThrow()) {
                 Response::current()->throwError($err);
                 //var_dump("throw error");
@@ -277,6 +287,16 @@ class Error
 
 				$err = self::create(9999, $file, $line, $cls[0], $cls[1], [$msgh]);
 				//var_dump($err);
+
+				//记录 error 日志
+				Log::error(
+					$pmsg,
+					[
+						"file" => $file,
+						"line" => $line
+					]
+				);
+
 				if (!is_null($err) && $err instanceof Error) {
 					if ($err->mustThrow()) {
 						Response::current()->throwError($err);

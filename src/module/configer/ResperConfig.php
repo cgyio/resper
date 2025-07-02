@@ -1,7 +1,7 @@
 <?php
 /**
- * resper 框架 App config 基类
- * 任意 App 类的 config 类继承自此类
+ * resper 框架 Resper config 类
+ * 自定义 Resper 响应者类 应使用此类作为 参数配置器
  */
 
 namespace Cgy\module\configer;
@@ -15,14 +15,14 @@ use Cgy\util\Str;
 use Cgy\util\Is;
 use Cgy\util\Path;
 
-class AppConfig extends BaseConfig 
+class ResperConfig extends BaseConfig 
 {
     /**
-     * 定义统一的 App 应用类预设数据结构
+     * 定义统一的 Resper 类预设数据结构
      * !! 子类可以覆盖
      */
     protected $init = [
-        "name" => "App应用类名称",
+        
     ];
 
     /**

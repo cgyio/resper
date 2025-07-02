@@ -135,4 +135,40 @@ class Request
         return self::$current->posts->$key($dft);
     }
 
+    /**
+     * 获取当前请求的 来源信息
+     * 为一些需要区分请求来源的场景，提供数据
+     * !! Request::$current 必须已创建
+     * @return Array | null
+     */
+    public static function audience()
+    {
+        $req = self::$current;
+        if (!$req instanceof Request) return null;
+        $aud = [
+            "referer" => $_SERVER["HTTP_REFERER"] ?? "",
+            "origin" => $_SERVER["HTTP_ORIGIN"] ?? "",
+            "ip" => $_SERVER["REMOTE_ADDR"] ?? "",
+            "audience" => "",
+            "protocol" => "",   //https or http
+        ];
+        $audience = "public";   //默认的 来源
+        if (Is::nemstr($aud["referer"])) {
+            $audience = $aud["referer"];
+        } else {
+            if (Is::nemstr($aud["origin"])) {
+                $audience = $aud["origin"];
+            }
+        }
+        if ($audience==="public") {
+            $aud["protocol"] = "http";
+        } else {
+            $aud["protocol"] = strpos(strtolower($audience), "https://")!==false ? "https" : "http";
+            $audience = explode("/", explode("://", $audience)[1])[0];
+        }
+        $aud["audience"] = $audience;
+
+        return $aud;
+    }
+
 }

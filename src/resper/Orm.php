@@ -75,7 +75,7 @@ class Orm
 
         //Orm 参数
         $ormc = $conf["orm"] ?? [];
-        if (empty($ormc)) return null;
+        if (empty($ormc) || (isset($ormc["enable"]) && $ormc["enable"]!==true)) return null;
         $this->config = $ormc;
 
         //数据库驱动类

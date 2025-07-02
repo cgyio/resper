@@ -547,6 +547,17 @@ class Prepare
                 "creation" => "varchar NOT NULL DEFAULT '[]'",
                 "column" => [
                     "filter" => ["role"],
+                    "select" => [
+                        "role" => [
+                            "dynamic" => true,
+                            "multiple" => true,
+                            "source" => [
+                                "table" => "role",
+                                "value" => "key",
+                                "label" => "name"
+                            ]
+                        ]
+                    ],
                     "json" => [
                         "role" => "indexed"
                     ],
@@ -557,6 +568,15 @@ class Prepare
                 "creation" => "varchar NOT NULL DEFAULT '[]'",
                 "column" => [
                     "filter" => ["auth"],
+                    "select" => [
+                        "auth" => [
+                            "dynamic" => true,
+                            "multiple" => true,
+                            "source" => [
+                                "api" => "uac/authvalues",
+                            ]
+                        ]
+                    ],
                     "json" => [
                         "auth" => "indexed"
                     ],

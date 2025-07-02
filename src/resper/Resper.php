@@ -62,8 +62,10 @@ class Resper extends ResperBase
      */
     public static function start($opt = [])
     {
+        //var_dump(0);
         //只能调用一次
-        if (self::isStarted() === true) exit;
+        if (Resper::isStarted() === true) exit;
+        //var_dump(111);
 
         /**
          * 框架启动
@@ -72,13 +74,15 @@ class Resper extends ResperBase
         @session_start();
 
         //应用启动参数，定义常量
-        self::$config = new Config($opt);
+        Resper::$config = new Config($opt);
+        //var_dump(222);
 
         //patch composer autoload
-        self::patchAutoload();
+        Resper::patchAutoload();
 
         //初始化框架参数
-        self::$config->initConf();
+        Resper::$config->initConf();
+        //var_dump(333);
 
         //应用 errorHandler 自定义错误处理
         //Error::setHandler();
@@ -89,19 +93,21 @@ class Resper extends ResperBase
          */
         
         //创建 Request 请求实例
-        self::$request = Request::current();
+        Resper::$request = Request::current();
+        //var_dump(444);
         
         //查找并创建响应者 Resper 实例
-        self::current();
+        Resper::current();
+        //var_dump(555);
+        //var_dump(Resper::$params);
+        //var_dump(Resper::$resper);
 
-        //创建 Response 响应实例
-        self::$response = Response::current();
-
-        //响应者执行响应方法
-        self::$resper->response();
+        //通过 Resper::$resper 当前响应者创建 Response 响应实例
+        Resper::$response = Resper::$resper->response();
+        //var_dump(666);
 
         //Response 调用输出类 输出结果
-        self::$response->export();
+        Resper::$response->export();
 
         exit;
     }
@@ -113,7 +119,7 @@ class Resper extends ResperBase
      */
     private static function isStarted()
     {
-        return !is_null(self::$request) && !is_null(self::$resper) && !is_null(self::$response);
+        return !is_null(Resper::$request) && !is_null(Resper::$resper) && !is_null(Resper::$response);
     }
 
     /**
@@ -214,7 +220,7 @@ class Resper extends ResperBase
                 $model_ds = array_map(function($i) {
                     return ROOT_PATH.DS.str_replace("/",DS,trim($i));
                 }, DIR_MODEL);
-                //$alo->addPsr4($ns.'\\', $lib_ds);
+                $alo->addPsr4($ns.'\\', $lib_ds);
                 $alo->addPsr4($ns.'\\model\\', $model_ds);
 
             }
@@ -233,17 +239,17 @@ class Resper extends ResperBase
      */
     public static function current()
     {
-        $scls = self::class;
-        if (self::$resper instanceof $scls) return self::$resper;
+        $scls = Resper::class;
+        if (Resper::$resper instanceof $scls) return Resper::$resper;
 
-        $params = self::seek();
+        $params = Resper::seek();
         //var_dump($params);
-        self::$params = $params;
+        Resper::$params = $params;
         $resperCls = $params["resper"];
         $resper = new $resperCls();
 
         //缓存 resper
-        self::$resper = $resper;
+        Resper::$resper = $resper;
 
         /**
          * 触发 resper-created 事件
@@ -306,12 +312,12 @@ class Resper extends ResperBase
         $ma = [];
         if ($cls !== false) {
             $resper = $cls;
-            $ma = self::seekMethod($cls, array_slice($uri, 1));
+            $ma = Resper::seekMethod($cls, array_slice($uri, 1));
         } else {
             $cls = Module::has($uri[0]);
             if ($cls !== false) {
                 $resper = $cls;
-                $ma = self::seekMethod($cls, array_slice($uri, 1));
+                $ma = Resper::seekMethod($cls, array_slice($uri, 1));
             }
         }
         if (!empty($ma)) {
@@ -328,7 +334,7 @@ class Resper extends ResperBase
         $rpd = Resper::has($uri[0]);
         if (false !== $rpd) {
             $resper = $rpd;
-            $ma = self::seekMethod($rpd, array_slice($uri, 1));
+            $ma = Resper::seekMethod($rpd, array_slice($uri, 1));
             if (!empty($ma)) {
                 return [
                     "resper"    => $resper,
@@ -344,7 +350,7 @@ class Resper extends ResperBase
         $app = App::has("index");
         if (false !== $app) {
             $resper = $app;
-            $ma = self::seekMethod($app, $uri);
+            $ma = Resper::seekMethod($app, $uri);
             if (!empty($ma)) {
                 return [
                     "resper"    => $resper,
@@ -357,7 +363,7 @@ class Resper extends ResperBase
         /**
          *  4  判断是否 Resper 基类中的 某个 public 方法
          */
-        $ma = self::seekMethod($rpd, $uri);
+        $ma = Resper::seekMethod($rpd, $uri);
         if (!empty($ma)) {
             return [
                 "resper"    => $resperCls,
@@ -385,7 +391,7 @@ class Resper extends ResperBase
      */
     public static function seekMethod($cls, $uri = [])
     {
-        //如果 $cls 不是 Responder 子类，返回 null
+        //如果 $cls 不是 Resper 子类，返回 null
         if (!is_subclass_of($cls, Cls::find("resper"))) return null;
 
         //空 uri
@@ -395,11 +401,22 @@ class Resper extends ResperBase
 
         //查找 响应方法
         $m = $uri[0];
-        //响应方法必须是 实例方法/public方法
-        $has = Cls::hasMethod($cls, $m, "public", function($mi) {
-            return $mi->isStatic() === false;
-        });
-        if ($has) return [ $m, array_slice($uri, 1) ];
+        /**
+         * !! 排除一些固定的 resper 实例方法，这些方法不能作为响应方法
+         */
+        $except = [
+            "init", "path", "cls", 
+            "addMiddlewares", "middlewareProcess",
+            "response", "responsePaused", "responseLogin", "responseTokenError",
+            "__construct"
+        ];
+        if (!in_array($m, $except)) {
+            //响应方法必须是 实例方法/public方法
+            $has = Cls::hasMethod($cls, $m, "public", function($mi) {
+                return $mi->isStatic() === false;
+            });
+            if ($has) return [ $m, array_slice($uri, 1) ];
+        }
 
         //未找到有效的 响应方法 则返回默认方法 default
         return [ "default", $uri ];
@@ -419,7 +436,7 @@ class Resper extends ResperBase
         //首先查找 web root 下的 responder 响应类
         $wcls = Cls::find($cls);
         if (!empty($wcls)) {
-            if (is_subclass_of($wcls, self::class)) return $wcls;
+            if (is_subclass_of($wcls, Resper::class)) return $wcls;
         }
 
         //然后在 module 中查找
@@ -433,369 +450,10 @@ class Resper extends ResperBase
         @closedir($mdh);
         $mcls = Cls::find($mcls);
         if (!empty($mcls)) {
-            if (is_subclass_of($mcls, self::class)) return $mcls;
+            if (is_subclass_of($mcls, Resper::class)) return $mcls;
         }
         
         return false;
-    }
-
-
-
-    /**
-     * Resper 响应者实例方法
-     */
-
-    /**
-     * 构造
-     * @return void
-     */
-    public function __construct()
-    {
-        /**
-         * 根据 resper 响应者预设参数 初始化：
-         */
-        //初始化 orm
-        //$this->initOrm();
-        //实例化 Orm 类
-        $this->orm = Orm::current($this);
-
-        //自定义初始化动作
-        return $this->init();
-    }
-
-    /**
-     * resper 初始化，在构造方法中执行
-     * !! 不要覆盖
-     * 初始化 关联的 Orm 数据库操作类 并创建实例
-     * @return Resper $this
-     */
-    private function __initOrm()
-    {
-
-
-        $conf = $this->conf;
-        $ormc = $conf["orm"] ?? [];
-        if (!Is::nemarr($ormc)) return $this;
-        $enable = $ormc["enable"] ?? false;
-        if (!is_bool($enable) || $enable!==true) return $this;
-        $ddbc = self::$config->ctx("db");
-        $dbtp = $ormc["type"] ?? ($ddbc["type"] ?? "sqlite");
-
-        /**
-         * 创建 orm 参数
-         */
-        $ormc["type"] = $dbtp;
-        if ($dbtp=="sqlite") {
-            //采用 sqlite 数据库时，查找数据库文件路径
-            $dirs = $ormc["dirs"] ?? DIR_DB;
-            if (Is::nemstr($dirs)) $dirs = explode(",", trim($dirs, ","));
-            $dbps = array_map(function($i) {
-                $ia = explode("/", trim($i, "/"));
-                if (defined(strtoupper($ia[0])."_PATH")) {
-                    //var_dump(Path::cnst($ia[0]));
-                    $ip = Path::find($i, ["checkDir"=>true]);
-                    if (!empty($ip)) {
-                        //var_dump($ip);
-                        return $ip;
-                    }
-                }
-                return $this->path($i, false);
-            }, $dirs);
-            $dbp = Path::exists($dbps, ["checkDir"=>true]);
-            //var_dump($dbp);
-            if (!empty($dbp)) {
-                $ormc["path"] = Path::fix($dbp);
-                //查询数据库列表
-                $dbns = [];
-                $dbph = @opendir($dbp);
-                while(false !== ($dbn = readdir($dbph))) {
-                    if (in_array($dbn, [".",".."]) || is_dir($dbp.DS.$dbn) || strpos($dbn, ".db")===false) continue;
-                    $dbn = str_replace(".db","",$dbn);
-                    if (!in_array($dbn, $dbns)) $dbns[] = $dbn;
-                }
-                @closedir($dbph);
-                $ormc["dbns"] = $dbns;
-            } else {
-                //指定的数据库文件路径不存在，报错
-                trigger_error("resper::指定的数据库路径不存在，DIRS = ".implode(", ",$dirs), E_USER_ERROR);
-                return $this;
-            }
-        } else {
-            //TODO: 采用其他类型数据库
-            //...
-        }
-
-        //处理模型类文件路径
-        $mdps = $ormc["models"] ?? DIR_MODEL;
-        $mdps = Is::nemstr($mdps) ? explode(",", $mdps) : $mdps;
-        if (!Is::nemarr($mdps) || !Is::indexed($mdps)) $mdps = explode(",", DIR_MODEL);
-        $mbps = array_map(function($i) {
-            $ia = explode("/", trim($i, "/"));
-            if (defined(strtoupper($ia[0])."_PATH")) {
-                //var_dump(Path::cnst($ia[0]));
-                $ip = Path::find($i, ["checkDir"=>true]);
-                if (!empty($ip)) {
-                    //var_dump($ip);
-                    return $ip;
-                }
-            }
-            return $this->path($i, false);
-        }, $mdps);
-        $mbp = Path::exists($mbps, ["checkDir"=>true]);
-        var_dump($mdp);
-        $ormc["model"] = [
-            "path" => "",
-            "clsp" => "",    //类全称前缀
-        ];
-        if (!empty($mdp)) {
-            $ormc["model"]["path"] = Path::fix($mdp);
-        } else {
-            //默认模型文件路径，在当前响应者路径 model 文件夹下
-            $ormc["model"]["path"] = $this->path.DS."model";
-        }
-        //取得模型类全称 前缀
-        $mdp = $ormc["model"]["path"];
-        $mdclsp = str_replace(ROOT_PATH.DS, NS, $mdp);
-        $mdclsp = str_replace(DS, "\\", $mdclsp)."\\";
-        $ormc["model"]["clsp"] = $mdclsp;
-
-        //将 orm 参数写入 Resper::$config->context
-        $opt = [];
-        $rtp = strtolower($this->type);
-        $rpn = strtolower($this->cls);
-        self::$config->runtimeSet([
-            $rtp => [
-                $rpn => [
-                    "orm" => $ormc
-                ]
-            ]
-        ]);
-
-        //实例化 Orm 类
-        $this->orm = Orm::current($this);
-
-        return $this;
-    }
-
-    /**
-     * resper 初始化，在构造方法中执行
-     * !! 子类覆盖
-     * @return resper $this
-     */
-    protected function init()
-    {
-        //初始化动作，在构造后执行，子类覆盖
-        //...
-
-        //要返回自身
-        return $this;
-    }
-
-    /**
-     * resper 类 内部 文件/路径 查找
-     * !! 子类可覆盖
-     * @param String $path 文件/路径
-     * @param Mixed $params 
-     *      Array   Path::find() 方法的 第二参数
-     *      Bool    如果传入 false，则不查找真实文件
-     * @return String 完整的 文件/路径 !! 可能不存在
-     */
-    public function path($path = "", $params = null)
-    {
-        /**
-         * 处理传入的 params 参数
-         * 传入 Path::find() 第二参数
-         */
-        $dfp = ["inDir" => DIR_ASSET];
-        if (Is::nemarr($params) && Is::associate($params)) {
-            $params = Arr::extend($dfp, $params);
-        } else if ($params!==false) {
-            $params = $dfp;
-        } else {
-            $params = false;
-        }
-
-        /**
-         * 如果 $path 已存在
-         */
-        if (file_exists($path)) return $path;
-        if (is_dir($path)) {
-            if (!Is::nemarr($params)) {
-                return $path;
-            } else {
-                if (isset($params["checkDir"]) && $params["checkDir"]==true) {
-                    return $path;
-                }
-            }
-            return null;
-        }
-
-        //resper 类型：App / Module / Resper
-        $rtp = $this->type;
-        //resper 类全称
-        $cls = $this->resper;
-        //resper 类名，不是全名，foo\bar\Tom --> Tom
-        $name = $this->cls;
-        //路径前缀
-        $pre = $this->path;
-
-        
-        if ($params===false) {
-            //直接输出 真实的 resper 所在路径
-            if ($rtp == "App") {
-                $pre = APP_PATH.DS.strtolower($name);
-            } else {
-                $pr = Path::find($pre, ["checkDir"=>true]);
-                $pre = empty($pr) ? ROOT_PATH.DS.strtolower($name) : $pr;
-            }
-            if ($path=="") return $pre;
-            return $pre.DS.str_replace("/", DS, trim($path,"/"));
-        } else {
-            //查找真是 文件/路径
-            $full = $pre.($path=="" ? "" : "/".trim($path, "/"));
-            return Path::find($full, $params);
-        }
-    }
-
-    /**
-     * 获取 resper 内部 类全称
-     * !! 不要覆盖
-     * @param String $cls 类名 或 部分类名
-     * @return String 类全称 或 null
-     */
-    public function cls($cls)
-    {
-        $clp = $this->path;
-        $cln = $clp."/".trim($cls, "/");
-        return Cls::find($cln);
-    }
-
-    /**
-     * __get
-     * @param String $key
-     */
-    public function __get($key)
-    {
-        if (!empty(self::$params) && Is::associate(self::$params)) {
-            $ps = self::$params;
-            $cls = $ps["resper"];
-
-            switch ($key) {
-                //$this->ctx 返回 resper::$params 数组
-                case "ctx": return $ps; break;
-                //$this->cls 返回当前 resper 的 类名 不是全名
-                case "cls": return Cls::name($this); break;
-                
-                /**
-                 * $this->path 获取 响应者类 所在路径前缀
-                 * 通常用于查找 响应者路径下文件
-                 */
-                case "path":
-                    $clp = str_replace(NS, "", $cls);
-                    $clp = str_replace("\\", "/", $clp);
-                    $clp = strtolower($clp);
-                    if ($this->type == "Resper") {
-                        //响应者是 Resper 类
-                        $cla = explode("/", $clp);
-                        if (count($cla)>2 && in_array(strtolower($cla[0]), ["app", "module"])) {
-                            //定义在 app / module 路径下的 Resper 类
-                            $clp = implode("/", array_slice($cla, 0,2));
-                        }
-                    }
-                    return $clp;
-                    break;
-                
-                /**
-                 * $this->type 获取 当前响应者类型，可能是：
-                 * App / Module / Resper
-                 */
-                case "type":
-                    $appcls = Cls::find("App");
-                    $modcls = Cls::find("Module");
-                    if (is_subclass_of($cls, $appcls)) return "App";
-                    if (is_subclass_of($cls, $modcls)) return "Module";
-                    return "Resper";
-                    break;
-
-                /**
-                 * $this->conf 获取 当前响应者的 预设参数
-                 * 通过 Resper::start([...]) 修改的参数
-                 */
-                case "conf":
-                    //$rtp = $this->type;
-                    $xpt = $this->path;
-                    $conf = Resper::$config;
-                    return $conf->ctx(strtolower($xpt));
-                    break;
-
-                /**
-                 * $this->foo 读取 self::$params["foo"]
-                 */
-                default:
-                    if (isset($ps[$key])) return $ps[$key];
-                    break;
-            }
-        }
-    
-        return null;
-    }
-
-    /**
-     * 响应者实例 执行响应方法
-     * @return Response 实例
-     */
-    public function response()
-    {
-        //读取 响应者 响应方法参数
-        //响应者 == $this
-        $resper = $this->resper;    //self::$params["resper"]
-        $method = $this->method;    //self::$params["method"]
-        $uri = $this->uri;          //self::$params["uri"]
-
-        //对此响应者 进行权限控制
-        if ($this->uac==true) {
-            //TODO: 权限检查，无权限则 trigger_error
-            //...
-
-        }
-
-        //创建 Response 实例
-        $response = Response::current();
-
-        /**
-         * 暂停响应
-         */
-        if ($response->paused) {
-            $response->setFormat("pause");
-            //直接输出
-            $response->export();
-            exit;
-        }
-
-        //检查 Resper::$config 是否包含了 response 额外参数
-        $conf = $this->conf;
-        $resps = $conf["response"] ?? [];
-        if (!empty($resps)) {
-            $response->setParams($resps);
-        }
-
-        //执行响应方法
-        $result = null;
-        if (method_exists($this, $method)) {
-            $result = $this->$method(...$uri);
-        } else {
-            //响应方法不存在，通常不可能
-            //抛出错误
-            //trigger_error( ... );
-
-        }
-
-        //将 响应结果 写入 response 实例
-        $response->setData($result);
-
-        //返回 response 实例
-        return $response;
-        
     }
 
 }

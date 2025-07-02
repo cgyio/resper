@@ -190,7 +190,7 @@ class Configer
         foreach ($defs as $k => $v) {
             $k = $pre.strtoupper($k);
             $ln = count(explode("_",$k));
-            if (Is::associate($v) && !empty($v)) {
+            if (Is::nemarr($v) && Is::associate($v)) {
                 self::def($v, $k);
             } else {
                 if (!defined($k)) {

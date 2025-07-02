@@ -15,6 +15,7 @@ namespace Cgy\orm;
 
 use Cgy\Orm;
 use Cgy\orm\Db;
+use Cgy\orm\Curd;
 use Cgy\orm\model\Record;
 use Cgy\orm\model\Config;
 use Cgy\orm\model\Exporter;
@@ -133,6 +134,90 @@ class Model extends Record
     }
 
     /**
+     * 获取模型名称，不包含namespace
+     * @return String 数据模型名称，首字母大写
+     */
+    public static function mdn()
+    {
+        $clsn = static::class;
+        return basename(str_replace("\\","/",$clsn));
+    }
+
+    /**
+     * 判断数据模型是否已初始化
+     * @return Bool
+     */
+    public static function inited()
+    {
+        if (!static::$db instanceof Db) return false;
+        return static::$db->modelInited(static::mdn());
+    }
+
+    /**
+     * 在数据模型类内部执行 md() 作为此数据模型 curd 链式调用起点
+     * !! static::md() === static::$db->Mdn === Orm::Mdn()
+     * 无论此数据模型是否已被初始化，执行 md() 将自动初始化
+     * 用途：在数据模型类 内部 执行 curd 查询，例如
+     *      static::md()->nojoin()->whereUid($uid)->get();
+     * 
+     * @return Db 与 Orm::Mdn() 和 static::$db->Mdn 返回同样的数据库实例，其内部指向当前数据模型，可继续链式调用 curd 方法
+     */
+    public static function md()
+    {
+        $mdn = static::mdn();
+        //模型已被初始化，通过模型关联的数据库实例执行
+        if (static::inited()===true) return static::$db->$mdn;
+        //模型未被初始化，通过 Orm 方法执行
+        return Orm::$mdn();
+    }
+
+
+
+    /**
+     * 可通过链式调用的 数据模型表方法(静态方法)
+     * 可以这样使用：
+     *      Orm::Mdn()->where(...)->foo(...$args)->order(...)->select()
+     *      static::md()->column("*")->foo(...$args)->limit(10)->select()
+     * 这些方法可执行 自定义操作，修改当前 curd 操作实例的参数，并影响最终查询结果
+     * !! 这些方法必须返回 数据模型类全称
+     */
+
+    /**
+     * 根据 isXxxx 类型的字段值 查询记录
+     * static::md()->specialColumns("generator", "~", "E99")->...->select()
+     * @param String $isa 字段的特殊类型，如：unique 相当于查询所有 isUnique==true 的字段
+     * @param Array $val 查询的字段值，可以在字段值之前加上 logic 符号
+     * @return String 模型类全称
+     */
+    public static function specialColumns($isa, ...$val)
+    {
+        //确保数据模型已经初始化
+        $mdo = static::md();
+        //确保字段特殊类型 可用
+        if (!Is::nemstr($isa)) return $mdo->mcls;
+        //获取此特殊类型的字段列表
+        $colkey = strtolower($isa)."Columns";
+        $cols = $mdo->conf->$colkey;
+        if (!Is::nemarr($cols) || !Is::indexed($cols)) return $mdo->mcls;
+        //如果字段列表只有 1 个字段，直接调用 whereCol 方法
+        if (count($cols)==1) {
+            $m = "where".ucfirst($cols[0]);
+            $mdo = $mdo->$m(...$val);
+        } else {
+            $mdo = $mdo->whereCols($cols, ...$val);
+        }
+        return $mdo->mcls;
+    }
+    //快捷查询 isUnique 字段
+    public static function uniqueCols(...$val) {return static::specialColumns("unique", ...$val);}
+    //快速查询 isId 字段
+    public static function idCols(...$val) {return static::specialColumns("id", ...$val);}
+    //快速查询 isGenerator 字段
+    public static function generatorCols(...$val) {return static::specialColumns("generator", ...$val);}
+
+
+
+    /**
      * 静态调用 数据表记录实例 构造方法
      * $model::create() 创建 数据表记录实例
      * @param Array $data 数据表记录内容，通常由 curd 操作返回
@@ -162,7 +247,7 @@ class Model extends Record
     /**
      * curd 操作
      */
-    //r
+
     public static function __find(...$args)
     {
         $tb = static::$name;
@@ -535,9 +620,7 @@ class Model extends Record
         if (static::$db instanceof Db) {
             //只有已初始化的 model 模型类，才能执行：
 
-            /**
-             * Model::
-             */
+            
         }
     }
 
