@@ -106,8 +106,9 @@ class Prepare
         $pp = $mdc["prepare"] ?? [];
 
         // 0   检查是否定义了 prepare["extends"] 参数，如果有则执行 prepareExtends()
-        if (Is::nemstr($pp["extends"])) {
-            $this->prepareExtends($model, $pp["extends"]);
+        $exts = $pp["extends"] ?? null;
+        if (Is::nemstr($exts)) {
+            $this->prepareExtends($model, $exts);
             //更新 prepare 参数
             $mdc = $this->model[$model];
             $pp = $mdc["prepare"] ?? [];

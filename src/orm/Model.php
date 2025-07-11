@@ -144,6 +144,19 @@ class Model extends Record
     }
 
     /**
+     * 获取当前模型的 权限操作标记的 前缀  db/[dbname]/[modelname]
+     * 此方法将自动初始化 当前数据模型
+     * @return String 
+     */
+    public static function oprpre()
+    {
+        $db = static::md();
+        $dbn = strtolower($db->name);
+        $mdn = strtolower(static::mdn());
+        return "db/$dbn/$mdn";
+    }
+
+    /**
      * 判断数据模型是否已初始化
      * @return Bool
      */
@@ -221,7 +234,7 @@ class Model extends Record
      * 静态调用 数据表记录实例 构造方法
      * $model::create() 创建 数据表记录实例
      * @param Array $data 数据表记录内容，通常由 curd 操作返回
-     * @return Model 一条数据记录实例
+     * @return Record 一条数据记录实例
      */
     public static function create($data = [])
     {
@@ -232,7 +245,7 @@ class Model extends Record
     /**
      * 创建一条新记录，但不写入数据库
      * @param Array $data 新记录初始数据
-     * @return Model 实例
+     * @return Record 实例
      */
     public static function new($data = [])
     {
@@ -244,23 +257,41 @@ class Model extends Record
     }
 
 
+
     /**
-     * curd 操作
+     * C/U/R/D 实际方法，管理模型数据的入口方法
+     * 响应前端的 数据库操作的 请求
      */
 
-    public static function __find(...$args)
+    /**
+     * C 新建记录，实际写入数据库
+     * @param Record|Array $data 可以传入 记录实例 或 记录数据，不传入数据，则尝试从 input 中读取
+     * @return Array 数据记录实例的 ctx() 结果
+     */
+    public static function C($data=null)
     {
-        $tb = static::$name;
-        $db = static::$db;
-        if (!$db instanceof Db) return static::$cls;
-        $rs = $db->curdQuery("select");
-        var_dump($rs);
-        //create record set
-        $rso  = [];
-        foreach ($rs as $i => $rsi) {
-            $rso[$i] = new static($rsi);
+        //未传入数据，则从 input 中读取
+        $data = empty($data) ? Request::$current->inputs->json : $data;
+        
+        if ($data instanceof Record) {
+            if ($data->isNew!==true) {
+                //传入的记录实例 不是新建记录，报错
+                trigger_error("orm/base::不是新增的记录无法添加到数据库中 [表=".static::mdn()."]", E_USER_ERROR);
+            }
+            //直接调用 记录实例的 save 方法
+            $data->save();
+            //返回新建记录的数据，所有字段+计算字段，不包含关联表数据
+            return $data->ctx();
         }
-        return $rso;
+    }
+
+    /**
+     * 根据ID获取 单条记录
+     * @return Record|null
+     */
+    public static function find($id)
+    {
+        return static::md()->whereId($id)->get();
     }
 
     /**
@@ -546,7 +577,7 @@ class Model extends Record
 
         } else {
             //指定的数据库文件路径不存在，报错
-            trigger_error("resper::指定的数据模型路径不存在，DIRS = ".implode(", ",$mdps), E_USER_ERROR);
+            trigger_error("orm/fatal::指定的数据模型路径不存在，DIRS = ".implode(", ",$mdps), E_USER_ERROR);
         }
 
         return $ormc;

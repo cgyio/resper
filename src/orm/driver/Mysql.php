@@ -56,7 +56,7 @@ class Mysql extends Driver
         $dbp = static::parseDirs($dirs);
         if (empty($dbp))  {
             //指定的数据库配置文件路径不存在，报错
-            trigger_error("resper::指定的数据库路径不存在，DIRS = ".implode(", ",$dirs), E_USER_ERROR);
+            trigger_error("orm/fatal::指定的数据库路径不存在，DIRS = ".implode(", ",$dirs), E_USER_ERROR);
         }
         $ormc["path"] = Path::fix($dbp);
         //查询数据库列表
@@ -69,7 +69,7 @@ class Mysql extends Driver
         $pwd = $mysql["password"] ?? null;
         if(!Is::nemarr($mysql) || !Is::nemstr($usr)||!Is::nemstr($pwd)) {
             //缺少 mysql 参数，报错
-            trigger_error("resper::未指定数据库连接参数", E_USER_ERROR);
+            trigger_error("orm/fatal::未指定数据库连接参数", E_USER_ERROR);
         }
         $ormc["mysql"] = Arr::extend($ormc["mysql"], $mysql);
         if (isset($mysql["database"])) {
@@ -138,7 +138,7 @@ class Mysql extends Driver
         $exi = self::ensureDbExists($opt);
         if ($exi!==true) {
             //数据库创建失败，报错
-            trigger_error("resper::无法连接数据库 [".$opt["database"]."]，数据库不存在", E_USER_ERROR);
+            trigger_error("orm/fatal::无法连接数据库 [".$opt["database"]."]，数据库不存在", E_USER_ERROR);
         }
 
         //创建数据库实例
@@ -355,7 +355,7 @@ class Mysql extends Driver
             return true;
         } catch (\Exception $e) {
             //创建数据库失败，报错
-            trigger_error("resper::无法创建数据库 [".$dbn."]，可能的原因：".$e->getMessage(), E_USER_ERROR);
+            trigger_error("orm/fatal::无法创建数据库 [".$dbn."]，可能的原因：".$e->getMessage(), E_USER_ERROR);
             return false;
         }
     }

@@ -85,7 +85,6 @@ class Resper extends ResperBase
         //var_dump(333);
 
         //应用 errorHandler 自定义错误处理
-        //Error::setHandler();
         Error::regist();
 
         /**

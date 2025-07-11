@@ -96,7 +96,6 @@ class Record
         if (empty($data) || !isset($data[$idf])) {
             //标记为 新建(未保存)记录
             $this->isNew = true;
-            $dft = static::$config->default;
             $data = Arr::extend($dft, $data);
             //if (empty($data)) $data = static::$config->default;
         }

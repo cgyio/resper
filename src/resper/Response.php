@@ -387,6 +387,7 @@ class Response
 
         /**
          * Response::error() == trigger_error("custom::....")
+         * 但是无法获得正确的 file/line 数据
          */
         if ($format == "error") {
             $errtit = "custom::".implode(",",$args);

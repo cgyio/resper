@@ -1,7 +1,10 @@
 <?php
 /**
  * cgyio/resper 框架 错误处理
- * Error 错误处理类
+ * Error 错误处理类 基类
+ * 
+ * 任何响应者类 都可以自定义各自的 错误处理类，定义各自的 错误信息 $config[EXPORT_LANG] 参数
+ * 并且可以自定义对应 code 的 自定义 beforeThrow 方法
  */
 
 namespace Cgy;
@@ -10,6 +13,7 @@ use Cgy\Response;
 use Cgy\Log;
 use Cgy\util\Is;
 use Cgy\util\Arr;
+use Cgy\util\Str;
 use Cgy\util\Path;
 use Cgy\util\Cls;
 
@@ -164,6 +168,28 @@ class Error
 		return in_array($this->level, [1,2,4,256,512]) || $this->level > 1024;
 	}
 
+	/**
+	 * 在抛出错误之前，执行自定义操作
+	 * 根据 $error->code 执行 ***ErrorBeforeThrow 方法，
+	 * 		$error->code == foo/bar  -->  fooBarErrorBeforeThrow
+	 * 子类可自定义针对不同 code 的 beforeThrow 方法
+	 * @return Error $this
+	 */
+	public function beforeThrow()
+	{
+		$code = $this->code;
+		if (strpos($code, "/")!==false) {
+			$code = Str::camel($code, false);
+		}
+		$cm = $code."ErrorBeforeThrow";
+		if (method_exists($this, $cm)) {
+			//执行针对此 $error->code 的 beforeThrow 方法
+			$this->$cm();
+		}
+
+		return $this;
+	}
+
 
 
     /**
@@ -241,13 +267,10 @@ class Error
 			);
 
             if ($err->mustThrow()) {
-                Response::current()->throwError($err);
-                //var_dump("throw error");
-                //var_dump($err);
+				//必须抛出错误时，执行自定义错误类中的 beforeThrow 方法
+                Response::current()->throwError($err->beforeThrow());
             } else {
                 Response::current()->setError($err);
-                //var_dump("set error");
-                //var_dump($err);
             }
         }
 	}
@@ -298,11 +321,12 @@ class Error
 				);
 
 				if (!is_null($err) && $err instanceof Error) {
-					if ($err->mustThrow()) {
-						Response::current()->throwError($err);
-					} else {
-						Response::current()->setError($err);
-					}
+					//fatal error 必须抛出错误，执行自定义错误类中的 beforeThrow 方法
+					//if ($err->mustThrow()) {
+						Response::current()->throwError($err->beforeThrow());
+					//} else {
+					//	Response::current()->setError($err);
+					//}
 				}
 			}
 		}
@@ -357,22 +381,38 @@ class Error
     }
 
     /**
-	 * get error class && error key (arr path)
+	 * 根据 trigger_error 方法传入的字符串参数，解析查找对应的 错误处理类
 	 * @param String $key				like 'foo/bar/jaz'
 	 * @return Array [ class fullname, error key (arr path) ]  or  null
+	 * foo/bar/jaz 		--> Cgy\error\Foo ->$config[EXPORT_LANG]["bar"]["jaz"]
+	 * 					--> Cgy\error\foo\Bar ->$config[EXPORT_LANG]["jaz"]
+	 * app/foo/bar/jaz  --> Cgy\App\foo\Error ->$config[EXPORT_LANG]["bar"]["jaz"]
+	 * 					--> Cgy\App\foo\error\Bar ->$config[EXPORT_LANG]["jaz"]
+	 * module/foo/bar/jaz	--> Cgy\module\foo\Error ->$config[EXPORT_LANG]["bar"]["jaz"]
+	 * 						--> Cgy\module\foo\error\Bar ->$config[EXPORT_LANG]["jaz"]
 	 */
 	public static function cls($key = null)
 	{
+		if (!Is::nemstr($key)) $key = "base/unknown";
 		if (Is::nemstr($key)) {
 			$key = str_replace("\\", "/", $key);
 			$key = str_replace(".", "/", $key);
 			$arr = explode("/", $key);
-			if ($arr[0]=="error") array_shift($arr);
+			if (count($arr)>=3 && in_array(strtolower($arr[0]), ["app","module"])) {
+				//app/module custom error cls
+				array_splice($arr, 2,0, "error");
+				$minidx = 3;
+			} else {
+				if ("error" != strtolower($arr[0])) {
+					array_unshift($arr, "error");
+				}
+				$minidx = 2;
+			}
 			$idx = 0;
-			for ($i=count($arr); $i>=1; $i--) {
+			for ($i=count($arr); $i>=$minidx; $i--) {
 				$subarr = array_slice($arr, 0, $i);
 				$subarr[count($subarr)-1] = ucfirst(strtolower(array_slice($subarr, -1)[0]));
-				$cls = Cls::find("error/".implode("/",$subarr));
+				$cls = Cls::find(implode("/",$subarr));
 				if (!is_null($cls)) {
 					$idx = $i;
 					break;
@@ -385,7 +425,7 @@ class Error
 					array_slice($arr, 0, $idx),
 					array_slice($arr, $idx)
 				];
-				return [ Cls::find("error/".implode("/", $arrs[0])), implode("/", $arrs[1])];
+				return [ Cls::find(implode("/", $arrs[0])), implode("/", $arrs[1])];
 			}
 		}
 		return null;

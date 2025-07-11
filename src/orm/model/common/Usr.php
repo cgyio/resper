@@ -13,6 +13,7 @@ use Cgy\Orm;
 use Cgy\orm\Model;
 use Cgy\orm\model\ModelSet;
 use Cgy\orm\model\Record;
+use Cgy\Uac;
 use Cgy\util\Is;
 
 class Usr extends Model 
@@ -24,6 +25,11 @@ class Usr extends Model
     public static $db = null;
     public static $cls = "";
     public static $config = null;
+
+    /**
+     * 用户权限列表 缓存
+     */
+    protected $AUTH = [];
 
 
 
@@ -44,38 +50,6 @@ class Usr extends Model
         return $rs;
     }
 
-    /**
-     * 快速权限验证
-     * @param String $uid
-     * @param Bool $all 是否要求全部有权限，默认 false
-     * @param Array $oprs
-     * @return Array [ "granted"=>false, "msg"=>"权限拒绝说明" ]
-     */
-    public static function checkAuthByUid($uid, $all=false, ...$oprs)
-    {
-        $usr = static::getByUid($uid);
-        if (!$usr instanceof Record) {
-            return [
-                "granted" => false,
-                "msg" => "用户ID不存在"
-            ];
-        }
-        $okrtn = [
-            "granted" => true,
-            "msg" => "权限验证通过"
-        ];
-        $m = $all ? "checkAuthAll" : "checkAuthAny";
-        if ($usr->$m(...$oprs)===true) return $okrtn;
-        return [
-            "granted" => false,
-            "msg" => "用户没有权限",
-            "opr" => $oprs
-        ];
-    }
-    //快捷
-    public static function checkAnyAuthByUid($uid, ...$oprs) { return static::checkAuthByUid($uid, false, ...$oprs); }
-    public static function checkAllAuthByUid($uid, ...$oprs) { return static::checkAuthByUid($uid, true, ...$oprs); }
-
 
 
     /**
@@ -95,15 +69,34 @@ class Usr extends Model
      */
     protected function authListGetter()
     {
+        //首先尝试读取缓存
+        if (Is::nemarr($this->AUTH)) return $this->AUTH;
+
         //准备权限列表
         $auth = [
+            /**
+             * 增加一些所有用户都有权限的 操作标识
+             * 通用响应方法 empty/error/default 都不需要权限，在此统一为用户添加权限
+             */
+            //"resper:common",
+
             /*
             "opr 操作标识",
             ...
             */
         ];
 
-        //获取用户角色 列表 ModelSet
+        //首先将用户拥有的角色，转为操作标识，存入 权限列表
+        $roleKeys = $this->role;    // [ 'role:normal', 'role:dev/manager', roleKey3, ... ]
+        if (Is::nemarr($roleKeys) && Is::indexed($roleKeys)) {
+            foreach ($roleKeys as $i => $rk) {
+                if (!in_array($rk, $auth)) {
+                    $auth[] = $rk;
+                }
+            }
+        }
+
+        //获取用户角色 列表 ModelSet，合并角色的权限列表
         $roles = $this->role_src;
         if (!empty($roles)) {
             $roles->each(function($role) use (&$auth) {
@@ -121,6 +114,9 @@ class Usr extends Model
         if (Is::nemarr($uauth)) {
             $auth = array_unique(array_merge($auth, $uauth));
         }
+
+        //缓存
+        $this->AUTH = $auth;
 
         //返回用户权限列表
         return $auth;
@@ -141,44 +137,126 @@ class Usr extends Model
     {
         $auth = $this->auth_list;
         if (!Is::nemarr($auth)) return false;
-        return in_array("sys-super", $auth);
+        return in_array("role:super", $auth);
     }
     
 
 
     /**
-     * 判断用户是否拥有 操作权限
-     * 使用 || 逻辑，只需其中有一个有权限 即可
-     * @param Array $oprs 要检查权限的 操作标识
+     * 判断用户是否某个用户角色
+     * @param Array $roles 要检查权限的 角色 key，第一个可以是 boolean 用来指定是否必须全部满足
      * @return Bool
      */
-    public function checkAuthAny(...$oprs)
+    public function isRole(...$roles)
     {
-        //SUPER 用户拥有全部权限
+        //SUPER 用户拥有全部角色
         if ($this->is_super===true) return true;
 
-        $auth = $this->auth_list;
-        if (!Is::nemarr($auth)) return false;
+        if (empty($roles)) return false;
+
+        //是否必须全部满足，默认 false 只需满足其一即可
+        $all = false;
+        if (is_bool($roles[0])) {
+            //如果第一个参数是 boolean 则作为 $all 参数
+            $all = array_shift($roles);
+        }
+
+        //进行 角色判断
+        $role = $this->role;
+        $roles = $this->fixRoleKeyInArray($roles);
         //diff
-        $diff = array_diff($oprs, $auth);
-        return count($diff) < count($oprs);
+        $diff = array_diff($roles, $role);
+
+        if ($all===true) {
+            //必须拥有所有 $roles 角色
+            return empty($diff);
+        } else {
+            //只需拥有 $roles 其中之一即可
+            return count($diff) < count($roles);
+        }
+    }
+    //快捷
+    public function isRoleAny(...$roles) { 
+        array_unshift($roles, false);
+        return $this->isRole(...$roles); 
+    }
+    public function isRoleAll(...$roles) { 
+        array_unshift($roles, true);
+        return $this->isRole(...$roles); 
     }
 
     /**
      * 判断用户是否拥有 操作权限
-     * 使用 && 逻辑，必须要用所有权限
-     * @param Array $oprs 要检查权限的 操作标识
-     * @return Bool
+     * @param Array $oprs 要检查权限的 操作标识，第一个可以是 boolean 用来指定是否必须全部满足
+     * @return Array  统一的权限验证返回结果
      */
-    public function checkAuthAll(...$oprs)
+    public function ac(...$oprs)
     {
         //SUPER 用户拥有全部权限
-        if ($this->is_super===true) return true;
-        
+        if ($this->is_super===true) return $this->acRtn(true);
+
+        if (empty($oprs)) return $this->acRtn(false);
+
+        //是否必须全部满足，默认 false 只需满足其一即可
+        $all = false;
+        if (is_bool($oprs[0])) {
+            //如果第一个参数是 boolean 则作为 $all 参数
+            $all = array_shift($oprs);
+        }
+
+        //执行权限判断
         $auth = $this->auth_list;
-        if (!Is::nemarr($auth)) return false;
+        if (!Is::nemarr($auth)) return $this->acRtn(false);
         //diff
         $diff = array_diff($oprs, $auth);
-        return empty($diff);
+
+        if ($all===true) {
+            //必须拥有所有 $oprs 权限
+            $granted = empty($diff);
+        } else {
+            //只需拥有 $oprs 其中之一即可
+            $granted = count($diff) < count($oprs);
+        }
+        //返回验证结果
+        return $this->acRtn($granted, $diff);
+    }
+    //快捷
+    public function acAny(...$oprs) { 
+        array_unshift($oprs, false);
+        return $this->ac(...$oprs); 
+    }
+    public function acAll(...$oprs) { 
+        array_unshift($oprs, true);
+        return $this->ac(...$oprs); 
+    }
+
+
+
+    /**
+     * tools
+     */
+
+    /**
+     * 返回统一的 权限验证结果数据
+     * 直接通过 Uac::rtn() 方法来执行
+     */
+    protected function acRtn(...$args)
+    {
+        return Uac::rtn(...$args);
+    }
+
+    // ['foo','bar'] --> ['role:foo','role:bar']
+    protected function fixRoleKeyInArray($roles=[])
+    {
+        if (!Is::nemarr($roles)) return [];
+        $roles = array_map(function($ri) {
+            if (!Is::nemstr($ri)) return null;
+            if (substr($ri, 0, 5)!=="role:") return "role:$ri";
+            return $ri;
+        }, $roles);
+        $roles = array_filter($roles, function($ri) {
+            return Is::nemstr($ri);
+        });
+        return array_merge($roles);
     }
 }

@@ -610,7 +610,7 @@ class Db
     {
         $m = $this->hasApi($api);
         if ($m===false) {
-            trigger_error("orm::请求的 Api 不存在，Api = ".$this->name."/".$api, E_USER_ERROR);
+            trigger_error("orm/api::请求的 Api 不存在，Api = ".$this->name."/".$api, E_USER_ERROR);
         }
         return $this->$m(...$args);
     }

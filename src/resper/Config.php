@@ -170,6 +170,20 @@ class Config extends Configer
 
         ],
 
+        /**
+         * 可手动定义 自定义 resper 响应者类
+         * !! 在 Resper::start([ ... ]) 写入自定义参数
+         * 这些类通常保存在 webroot/library 路径下
+         * 可以为这些类定义对应的 config 类，类文件应为 webroot/library/[custom resper name]/Config.php
+         */
+        /*
+        "Foo" => [
+            "config" => "\\Cgy\\foo\\Config",  自定义响应者的 config 类全称
+            或者直接在此处定义参数，形式与 module/configer/BaseConfig 类要求一致
+            ...
+        ],
+        */
+
     ];
 
     /**
@@ -296,12 +310,24 @@ class Config extends Configer
             if (method_exists($this, $m)) {
                 //定义了设置项处理方法
                 $this->$m($v);
-            } else if (Resper::has($k)) {
-                //某个 自定义 Resper 类的 预设参数
-                //建立 Resper configer 实例
-                $cfg = new ResperConfig($v);
-                $ctx = $cfg->ctx();
+            } else if (Resper::has($k)!==false) {
+                /**
+                 * 针对自定义 resper 响应者
+                 * 建立 Resper configer 实例
+                 * 如果参数中定义了 config 类，直接使用
+                 * 否则 使用 ResperConfig 类 
+                 */
+                $ccls = $v["config"] ?? null;
+                if (Is::nemstr($ccls) && class_exists($ccls)) {
+                    //参数定义了 config 类，实例化
+                    unset($v["config"]);
+                    $cfg = new $ccls($v);
+                } else {
+                    //未定义 config，直接使用 ResperConfig 类
+                    $cfg = new ResperConfig($v);
+                }
                 //将 处理完的参数 写入 context
+                $ctx = $cfg->ctx();
                 $this->context = Arr::extend($this->context, [
                     $k => $ctx
                 ]);

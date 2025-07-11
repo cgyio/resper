@@ -256,7 +256,7 @@ class Config
         $crts = $init["creation"] ?? [];
         if (empty($cols) || empty($crts)) {
             //缺少参数，报错
-            trigger_error("orm::数据表无法初始化，缺少必要参数", E_USER_ERROR);
+            trigger_error("orm/fatal::数据表无法初始化，缺少必要参数", E_USER_ERROR);
         }
 
         //准备要写入 context 的 内容
@@ -825,7 +825,7 @@ class Config
             $doc = str_replace("\\n", "", $doc);
             $doc = str_replace("*\/", "", $doc);
             $da = explode("* @", $doc);
-            array_shift($da);   //* getter
+            array_shift($da);   //* api
             $confi = [
                 "name" => "",
                 "role" => "all",

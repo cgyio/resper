@@ -116,7 +116,7 @@ class Notice
     {
         $pg = $this->page();
         if (!file_exists($pg)) {
-            trigger_error("custom::Notice页面未找到！", E_USER_ERROR);
+            trigger_error("resper/base::Notice页面未找到！", E_USER_ERROR);
         }
         $this->fixParams();
         $ps = Arr::extend($this->params, $extra);

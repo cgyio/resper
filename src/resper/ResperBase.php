@@ -140,15 +140,8 @@ class ResperBase
          * 验证不通过，将在 Uac 实例内部执行相应的 终止响应操作
          */
         if (Uac::on()===true) {
-            $this->uac->verify();
-            
-            if (Uac::isLogin()===true) {
-                //如果 用户已登录，则 验证 当前响应方法的 权限
-                
-            } else {
-                //用户未登录，或 Uac 权限验证 verify 方法未能正确执行，终止响应
-
-            }
+            //暂停验证
+            //$this->uac->verify();
         }
 
         //入站中间件处理
@@ -587,6 +580,7 @@ class ResperBase
 
     /**
      * 响应 Uac 权限验证相关操作 请求
+     * 由 Uac 实例代理
      * !! 子类 不要 覆盖
      * @return Mixed
      */
@@ -603,18 +597,29 @@ class ResperBase
 
     /**
      * 响应 Orm 数据库操作 请求
+     * 由 Orm 实例代理
      * !! 子类 不要 覆盖 !!
      * @return Mixed
      */
     final public function db(...$args)
     {
         if (empty($this->orm)) {
-            trigger_error("orm::ORM 对象未初始化", E_USER_ERROR);
+            trigger_error("orm/api::ORM 对象未初始化", E_USER_ERROR);
             return null;
         }
 
         //调用 Orm 实例的 response 方法，响应此请求
         return $this->orm->response(...$args);
+    }
+
+    /**
+     * 响应 api 方法操作的请求
+     * !! 子类 不要 覆盖 !!
+     * @return Mixed
+     */
+    final public function api(...$args)
+    {
+
     }
 
     /**

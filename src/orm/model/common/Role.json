@@ -37,7 +37,7 @@
                 "dynamic": true,
                 "multiple": true,
                 "source": {
-                    "api": "uac/authvalues"
+                    "api": "uac/operates"
                 }
             }
         },

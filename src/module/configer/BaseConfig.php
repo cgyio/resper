@@ -122,6 +122,22 @@ class BaseConfig extends Configer
              * 指定登陆页面路径，不指定则使用框架定义的 登陆页面
              */
             "login" => "root/page/login.php",
+
+            /**
+             * 权限操作列表 生成/管理 类参数
+             */
+            "operation" => [
+                //自定义 操作列表处理类，不指定使用默认的 \Cgy\uac\Operation
+                "handler" => "\\Cgy\\uac\\Operation",
+                /**
+                 * 可以指定 特殊的 操作列表，用于权限控制
+                 */
+                "operates" => [
+                    /*
+                    "sys:finance/report" => "系统财务权限：查看财务报表"
+                    */
+                ],
+            ],
         ],
 
         //注册中间件
@@ -130,7 +146,6 @@ class BaseConfig extends Configer
             "in" => [
                 //中间件类全称，预定义一些通用的 中间件
                 "\\Cgy\\middleware\\in\\Secure",    //用户输入数据过滤
-                "\\Cgy\\middleware\\in\\AuthCheck", //用户权限验证
             ],
             //出站
             "out" => [

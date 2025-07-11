@@ -45,7 +45,7 @@ class Sqlite extends Driver
             $ormc["dbns"] = $dbns;
         } else {
             //指定的数据库文件路径不存在，报错
-            trigger_error("resper::指定的数据库路径不存在，DIRS = ".implode(", ",$dirs), E_USER_ERROR);
+            trigger_error("orm/fatal::指定的数据库路径不存在，DIRS = ".implode(", ",$dirs), E_USER_ERROR);
         }
 
         return $ormc;

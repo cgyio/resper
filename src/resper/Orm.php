@@ -200,13 +200,13 @@ class Orm
 
     /**
      * 替代 resper 实例，响应数据库操作请求
-     * 发送到 任意 resper 的 db/*** 请求，将被转发到此
+     * 发送到 https://host/[foobar/]db/*** 的请求，将被转发到此
      * @param Array $args 请求的 URI 
      * @return Mixed
      */
     public function response(...$args)
     {
-        if (empty($args)) trigger_error("orm::无法执行数据库操作，缺少必要参数", E_USER_ERROR);
+        if (empty($args)) trigger_error("orm/api::缺少必要参数", E_USER_ERROR);
 
         //检查 URI 参数是否包含数据库名
         if (false !== ($dbn = $this->hasDb($args[0]))) {
