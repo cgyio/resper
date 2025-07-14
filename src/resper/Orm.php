@@ -26,17 +26,35 @@ use Cgy\util\Str;
 use Cgy\util\Cls;
 
 use Cgy\traits\staticCurrent;
+use Cgy\traits\staticExtra;
 
 class Orm 
 {
     //引入trait
     use staticCurrent;
+    use staticExtra;
 
     /**
      * current
      * 缓存已实例化的 Orm 类
      */
     public static $current = null;
+
+    /**
+     * extra 
+     * 此类正常情况下是以单例模式运行，但是也支持 另外创建实例
+     * 如果有响应者被劫持，则被劫持的响应者关联的 Orm 实例就需要另外创建
+     * 另外创建的 Orm 实例缓存到此属性下，并不会影响已有的 Orm::$current 单例
+     */
+    public static $extra = [
+        /*
+        "EX_md5(resper::class)" => Orm 实例
+        */
+    ];
+    //标记此 Orm 实例是否是 被劫持的响应者实例关联的
+    public $isExtra = false;
+    //如果是被劫持响应者关联的实例，则此实例在 Orm::$extra 数组中的键名
+    public $exKey = "";
 
     /**
      * 缓存已实例化的 Db 数据库类 
@@ -61,6 +79,8 @@ class Orm
     public static $initRequiredDbs = [
         //"Uac"
     ];
+
+
 
     /**
      * 构造
@@ -302,54 +322,61 @@ class Orm
      */
     public static function __callStatic($key, $args)
     {
-        $orm = Orm::$current;
-
-        if ($orm instanceof Orm) {
-            //当前响应者实例 存在与其关联的 Orm 实例
-
-            /**
-             * Orm::Dbn()           返回 Db 实例
-             * Orm::Dbn("Tbn")      返回 Db 实例，同时将 Db->currentModel 指向 Tbn
-             */
-            if ($orm->hasDb($key)!==false) {
-                $dbo = $orm->$key;
-                if (!$dbo instanceof Db) return null;
-                if (Is::nemarr($args)) {
-                    $mdn = array_shift($args);
-                    if ($dbo->hasModel($mdn)) {
-                        return $dbo->$mdn;
-                    } else {
-                        return null;
+        //从 Orm::$current 和 Orm::$extra 中获取可能存在的 Orm 实例，在这些实例中查找目标 dbn/mdn
+        $orms = [
+            "current" => Orm::$current,
+        ];
+        if (Is::nemarr(Orm::$extra)) $orms = array_merge($orms, Orm::$extra);
+        
+        //循环查找，默认以 current 实例为主
+        foreach ($orms as $ok => $orm) {
+            if ($orm instanceof Orm) {
+                //当前响应者实例 存在与其关联的 Orm 实例
+    
+                /**
+                 * Orm::Dbn()           返回 Db 实例
+                 * Orm::Dbn("Tbn")      返回 Db 实例，同时将 Db->currentModel 指向 Tbn
+                 */
+                if ($orm->hasDb($key)!==false) {
+                    $dbo = $orm->$key;
+                    if (!$dbo instanceof Db) return null;
+                    if (Is::nemarr($args)) {
+                        $mdn = array_shift($args);
+                        if ($dbo->hasModel($mdn)) {
+                            return $dbo->$mdn;
+                        } else {
+                            return null;
+                        }
+                    }
+                    return $orm->$key; 
+                }
+    
+                /**
+                 * Orm::Tbn()   返回 对应的 Db 实例，同时将 Db->currentModel 指向 Tbn
+                 */
+                $hasm = $orm->hasModel($key);
+                if ($hasm!==false && Is::nemstr($hasm["dbn"])) {
+                    $dbn = $hasm["dbn"];
+                    return Orm::$dbn($key);
+                }
+    
+                /**
+                 * Orm::DbnTbn()    返回 Db 实例，同时将 Db->currentModel 指向 Tbn
+                 */
+                if (Str::beginUp($key)) {
+                    $ks = Str::snake($key, "-");
+                    $ks = str_replace("-", " ", $ks);
+                    $ks = ucwords($ks);
+                    $ka = explode(" ", $ks);
+                    if (count($ka)>0) {
+                        $dbn = array_shift($ka);
+                        if ($orm->hasDb($dbn)!==false) {
+                            return Orm::$dbn(...$ka);
+                        }
                     }
                 }
-                return $orm->$key; 
+    
             }
-
-            /**
-             * Orm::Tbn()   返回 对应的 Db 实例，同时将 Db->currentModel 指向 Tbn
-             */
-            $hasm = $orm->hasModel($key);
-            if ($hasm!==false && Is::nemstr($hasm["dbn"])) {
-                $dbn = $hasm["dbn"];
-                return Orm::$dbn($key);
-            }
-
-            /**
-             * Orm::DbnTbn()    返回 Db 实例，同时将 Db->currentModel 指向 Tbn
-             */
-            if (Str::beginUp($key)) {
-                $ks = Str::snake($key, "-");
-                $ks = str_replace("-", " ", $ks);
-                $ks = ucwords($ks);
-                $ka = explode(" ", $ks);
-                if (count($ka)>0) {
-                    $dbn = array_shift($ka);
-                    if ($orm->hasDb($dbn)!==false) {
-                        return Orm::$dbn(...$ka);
-                    }
-                }
-            }
-
         }
 
         return null;

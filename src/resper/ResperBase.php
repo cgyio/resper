@@ -19,6 +19,7 @@ use Cgy\request\Url;
 use Cgy\App;
 use Cgy\Module;
 use Cgy\Event;
+use Cgy\module\Configer;
 use Cgy\util\Is;
 use Cgy\util\Arr;
 use Cgy\util\Cls;
@@ -37,6 +38,18 @@ class ResperBase
     public $intr = "";  //resper 说明，子类覆盖
     public $name = "";  //resper 名称，子类覆盖
     public $key = "";   //resper 调用路径
+
+    /**
+     * 在 resper 实例中缓存 Resper::$params
+     * !! 用于 此响应者被 以劫持方式 调用的时候，访问对应的 params
+     */
+    protected $ownParams = [
+        /*
+        "resper" => 当前响应者的类全称
+        "method" => 本次响应会话调用的 响应方法名
+        "uri" => 响应方法的 参数
+        */
+    ];
 
     /**
      * 日志处理
@@ -79,6 +92,11 @@ class ResperBase
      */
     public $unpause = false;
 
+    /**
+     * 此响应者实例 是否以劫持方式 被创建
+     */
+    public $isHijack = false;
+
 
     /**
      * Resper 响应者实例方法
@@ -86,22 +104,47 @@ class ResperBase
 
     /**
      * 构造
+     * @param Array $opt 额外的响应者实例化参数，可以在实例化阶段，对响应者的实例化方式做定制
      * @return void
      */
-    public function __construct()
+    public function __construct($opt=[])
     {
         /**
-         * 根据 resper 响应者预设参数 初始化：
+         * 合并 resper 响应者预设参数 和 实例化参数 $opt
          */
-        //日志启动
-        $this->log = Log::current($this);
-        //实例化 Orm 类
-        $this->orm = Orm::current($this);
-        //实例化 Uac 类
-        $this->uac = Uac::current($this);
+        if (Is::nemarr($opt)) $this->conf("", $opt);
+        $conf = $this->conf;
 
-        //注册中间件，从 config 中获取需要添加的中间件
-        $this->addMiddlewares();
+        //根据 是否以劫持方式使用 来决定怎样初始化组件，默认 false
+        $hijack = $conf["hijack"] ?? false;
+        if ($hijack===false) {
+            //正常实例化响应者
+            //缓存 Resper::$params
+            $this->ownParams = Resper::$params;
+            //日志启动
+            $this->log = Log::current($this);
+            //实例化 Orm 类
+            $this->orm = Orm::current($this);
+            //实例化 Uac 类
+            $this->uac = Uac::current($this);
+            //注册中间件，从 config 中获取需要添加的中间件
+            $this->addMiddlewares();
+        } else {
+            //此响应者以被劫持的方式实例化
+            //缓存 $conf["ownParams"]
+            $this->ownParams = $conf["ownParams"] ?? Resper::$params;
+            //不启动 Log，使用当前主会话响应者的 Log 方法
+            $this->conf("log/enable", false);
+            //$this->log = null;
+            //单独创建额外的 Orm 实例，不影响 Orm::$current
+            $this->orm = Orm::extra($this);
+            //不启动 Uac 
+            $this->conf("uac/enable", false);
+            $this->uac = Uac::extra($this);
+
+            //标记被劫持
+            $this->isHijack = true;
+        }
 
         //自定义初始化动作
         return $this->init();
@@ -134,6 +177,30 @@ class ResperBase
         $resper = $this->resper;    //Resper::$params["resper"]
         $method = $this->method;    //Resper::$params["method"]
         $uri = $this->uri;          //Resper::$params["uri"]
+
+        /**
+         * 如果此响应者实例 是被劫持的，则执行劫持后的响应方法
+         * 劫持某个响应者，目的仅仅是调用该响应者的某个实例方法
+         * 因此，中间件/Uac 都不会执行，也不会创建 response 响应实例
+         * 仅执行被劫持的响应方法，并返回方法执行的结果
+         */
+        if ($this->isHijack) {
+            //执行 被劫持的响应方法
+            $result = null;
+            if (method_exists($this, $method)) {
+                $result = $this->$method(...$uri);
+            } else {
+                //响应方法不存在，通常不可能
+                //抛出错误
+                //trigger_error( ... );
+
+            }
+            //释放资源
+            Orm::removeExtra($this->orm->exKey);
+            Uac::removeExtra($this->uac->exKey);
+            //返回响应方法执行的结果
+            return $result;
+        }
 
         /**
          * 执行 Uac 权限验证
@@ -262,6 +329,25 @@ class ResperBase
     }
 
     /**
+     * 操作当前响应者的预设参数，读取/编辑
+     * 与 Configer 类的 ctx 方法参数一致
+     * @param String $key 
+     * @param Mixed $data
+     * @return Mixed
+     */
+    final public function conf($key="", $data="__empty__")
+    {
+        //判断当前会话的 参数设置类是否已经实例化
+        $cfger = Resper::$config;
+        if (empty($cfger) || !$cfger instanceof Configer) return null;
+        //为调用路径 增加当前响应者的 路径前缀
+        $cpath = strtolower($this->path);
+        $key = Is::nemstr($key) ? $cpath."/".trim($key,"/") : $cpath;
+        //调用 参数设置类实例的 ctx 方法
+        return $cfger->ctx($key, $data);
+    }
+
+    /**
      * 获取 resper 内部 类全称
      * @param String $cls 类名 或 部分类名
      * @return String 类全称 或 null
@@ -347,8 +433,10 @@ class ResperBase
      */
     public function __get($key)
     {
-        if (!empty(Resper::$params) && Is::associate(Resper::$params)) {
-            $ps = Resper::$params;
+        //使用缓存的 ownParams 参数
+        $ps = $this->ownParams;
+        if (!Is::nemarr($ps) || !Is::associate($ps)) $ps = Resper::$params;
+        if (Is::nemarr($ps) && Is::associate($ps)) {
             $cls = $ps["resper"];
 
             switch ($key) {
@@ -526,8 +614,12 @@ class ResperBase
         Log::emergency($msg."Token 可能被篡改", $vali);
 
         //创建 Response 实例
-        $response = empty(Response::$current) ? Response::current() : Response::$current;
-        Response::error("权限验证失败");
+        //$response = empty(Response::$current) ? Response::current() : Response::$current;
+        //Response::error("权限验证失败");
+        //exit;
+
+        //触发 权限拒绝 错误
+        trigger_error("uac/denied::权限验证失败", E_USER_ERROR);
         exit;
     }
 
@@ -545,8 +637,8 @@ class ResperBase
      */
     public function default(...$args)
     {
-        trigger_error("custom::error test", E_USER_ERROR);
-        exit;
+        //trigger_error("app/qyoms/test::错误测试", E_USER_ERROR);
+        //exit;
         //默认方法 返回未找到 Resper 实例的预设页面
         $pg = RESPER_PATH.DS."page".DS."not-found.php";
         if (file_exists($pg)) {

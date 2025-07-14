@@ -26,17 +26,35 @@ use Cgy\util\Str;
 use Cgy\util\Cls;
 
 use Cgy\traits\staticCurrent;
+use Cgy\traits\staticExtra;
 
 class Uac
 {
     //引入trait
     use staticCurrent;
+    use staticExtra;
 
     /**
      * current
      * 缓存已实例化的 Uac 类
      */
     public static $current = null;
+
+    /**
+     * extra 
+     * 此类正常情况下是以单例模式运行，但是也支持 另外创建实例
+     * 如果有响应者被劫持，则被劫持的响应者关联的 Uac 实例就需要另外创建
+     * 另外创建的 Uac 实例缓存到此属性下，并不会影响已有的 Uac::$current 单例
+     */
+    public static $extra = [
+        /*
+        "EX_md5(resper::class)" => Uac 实例
+        */
+    ];
+    //标记此 Uac 实例是否是 被劫持的响应者实例关联的
+    public $isExtra = false;
+    //如果是被劫持响应者关联的实例，则此实例在 Uac::$extra 数组中的键名
+    public $exKey = "";
 
     //依赖 Resper 实例
     public $resper = null;

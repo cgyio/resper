@@ -9,6 +9,8 @@ namespace Cgy\request;
 use Cgy\util\Secure;
 use Cgy\util\Session;
 use Cgy\util\Is;
+use Cgy\util\Arr;
+use Cgy\util\Str;
 use Cgy\util\Conv;
 
 class Input 
@@ -36,7 +38,9 @@ class Input
 
         //Secure 处理
         //...
-
+        //缓存处理后的 input
+        $this->origin = $input;
+        //写入 context
         $this->context = $input;
     }
 
@@ -67,9 +71,6 @@ class Input
         }
         return $output;
     }
-    //public function json() { return $this->export("json");}
-    //public function xml() { return $this->export("xml");}
-    //public function url() { return $this->export("url");}
 
     /**
      * __get 调用 export 方法
@@ -82,6 +83,65 @@ class Input
         //if ($key=="raw") $key = "";
         $out = $this->export($key);
         return $out;
+    }
+
+
+
+    /**
+     * 运行时修改 post 来的数据
+     * 通常在 劫持某个响应者执行某个响应方法时，可能需要 append 数据到 $requesr->inputs->context
+     * !! 应在执行完操作后 reset 此数据，恢复原来的 input 数据
+     */
+
+    /**
+     * 可以在运行时，插入 input 数据，模拟前端 post 数据
+     * @param String $type input 数据类型，默认为 json
+     * @param Array $input 要模拟 input 的数据 []，与原 input 数据采用 extend 方式合并
+     * @return $this
+     */
+    public function append($type="json", $input=[])
+    {
+        $oinp = $this->context;
+        $ninp = [];
+        switch($type){
+            case "json" :
+                $oinp = Conv::j2a($oinp);
+                $ninp = Arr::extend($oinp, $input);
+                $ninp = Conv::a2j($ninp);
+                break;
+            case "xml" :
+                $oinp = Conv::x2a($oinp);
+                $ninp = Arr::extend($oinp, $input);
+                $ninp = Conv::a2x($ninp);
+                break;
+            case "url" :
+                $oinp = Conv::u2a($oinp);
+                $ninp = Arr::extend($oinp, $input);
+                $ninp = Conv::a2u($ninp);
+                break;
+            case "arr" : 
+                $oinp = Arr::mk($oinp);
+                $ninp = Arr::extend($oinp, $input);
+                $ninp = Str::mk($ninp);
+            default :
+                $ninp = $oinp."\r\n".$input;
+                break;
+        }
+        //写入 context
+        $this->context = $ninp;
+        //返回
+        return $this;
+    }
+
+    /**
+     * 取消 运行时插入的 input 数据
+     * 
+     * @return $this
+     */
+    public function reset()
+    {
+        $this->context = $this->origin;
+        return $this;
     }
 
 

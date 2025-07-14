@@ -3,12 +3,13 @@
  * cgyio/resper 框架 错误处理
  * Error 错误处理类 基类
  * 
- * 任何响应者类 都可以自定义各自的 错误处理类，定义各自的 错误信息 $config[EXPORT_LANG] 参数
+ * 任何响应者类 都可以自定义各自的 错误处理类，定义各自的 错误信息 $config[$this->lang] 参数
  * 并且可以自定义对应 code 的 自定义 beforeThrow 方法
  */
 
 namespace Cgy;
 
+use Cgy\Request;
 use Cgy\Response;
 use Cgy\Log;
 use Cgy\util\Is;
@@ -31,15 +32,19 @@ class Error
 
     public $errkey = "";    //errConfigArrKeyPath
 
-    /**
-     * error code prefix
-     * should be overrided
-     */
-    protected $codePrefix = "000";
+	//当前会话的输出语言
+	public $lang = "zh-CN";
 
     /**
-	 * errors config
-	 * should be overrided
+     * error code 前缀
+     * !! 子类可覆盖
+	 * 不指定 则使用 类名称小写 作为前缀
+     */
+    protected $codePrefix = "";
+
+    /**
+	 * errors 错误信息预设，多语言
+	 * !! 子类必须覆盖
 	 */
 	protected $config = [
         /*
@@ -56,7 +61,12 @@ class Error
      */
     public function __construct()
     {
-
+		//缓存输出语言
+		if (!empty(Request::$current)) {
+			$this->lang = Request::$current->lang;
+		} else {
+			$this->lang = EXPORT_LANG;
+		}
     }
 
     /**
@@ -111,10 +121,9 @@ class Error
     {
         $title = "Undefined";
         $msg = "Undefined";
-        //$lang = EXPORT_LANG;
-        //var_dump($this->config[EXPORT_LANG]);
-        if (isset($this->config[EXPORT_LANG])) {
-            $conf = Arr::find($this->config[EXPORT_LANG], $errConfigArrKeyPath);
+        $lang = $this->lang;
+        if (isset($this->config[$lang])) {
+            $conf = Arr::find($this->config[$lang], $errConfigArrKeyPath);
             if (Is::nemstr($errConfigArrKeyPath) && !is_null($conf)) {
                 $title = $conf[0];
                 $msg = self::replaceErrMsg($conf[1], $msgReplacement);
@@ -134,7 +143,9 @@ class Error
      */
     protected function setCode($key)
     {
-		$this->code = $key;
+		//错误代码 code 的 前缀
+		$pre = $this->getCodePrefix();
+		$this->code = $pre.str_replace("/", "_", $key);
         return $this;
     }
 
@@ -153,6 +164,7 @@ class Error
 				$data[$v] = is_object($self->$v) ? Arr::mk($self->$v) : $self->$v;
 			}
 		}
+		$data["class"] = get_class($this);
 		$this->data = $data;
 		return $this;
 	}
@@ -171,14 +183,16 @@ class Error
 	/**
 	 * 在抛出错误之前，执行自定义操作
 	 * 根据 $error->code 执行 ***ErrorBeforeThrow 方法，
-	 * 		$error->code == foo/bar  -->  fooBarErrorBeforeThrow
+	 * 		$error->code == foo_bar  -->  fooBarErrorBeforeThrow
 	 * 子类可自定义针对不同 code 的 beforeThrow 方法
 	 * @return Error $this
 	 */
 	public function beforeThrow()
 	{
 		$code = $this->code;
-		if (strpos($code, "/")!==false) {
+		$pre = $this->getCodePrefix();
+		$code = str_replace($pre, "", $code);
+		if (strpos($code, "_")!==false) {
 			$code = Str::camel($code, false);
 		}
 		$cm = $code."ErrorBeforeThrow";
@@ -190,7 +204,29 @@ class Error
 		return $this;
 	}
 
+	/**
+	 * 获取当前错误类的 错误代码前缀 codePrefix
+	 */
+	protected function getCodePrefix()
+	{
+		//错误代码 code 的 前缀
+		if ($this->codePrefix!="") {
+			$pre = $this->codePrefix;
+		} else {
+			$clsn = get_class($this);
+			$clsn = str_replace(trim(NS, "\\")."\\","", $clsn);
+			$clsn = str_replace("\\","_", $clsn);
+			$pre = strtolower($clsn);
+		}
+		$pre = trim($pre, "_")."_";
+		return $pre;
+	}
 
+
+
+	/**
+	 * static tools
+	 */
 
     /**
 	 * create error object
@@ -384,12 +420,13 @@ class Error
 	 * 根据 trigger_error 方法传入的字符串参数，解析查找对应的 错误处理类
 	 * @param String $key				like 'foo/bar/jaz'
 	 * @return Array [ class fullname, error key (arr path) ]  or  null
-	 * foo/bar/jaz 		--> Cgy\error\Foo ->$config[EXPORT_LANG]["bar"]["jaz"]
-	 * 					--> Cgy\error\foo\Bar ->$config[EXPORT_LANG]["jaz"]
-	 * app/foo/bar/jaz  --> Cgy\App\foo\Error ->$config[EXPORT_LANG]["bar"]["jaz"]
-	 * 					--> Cgy\App\foo\error\Bar ->$config[EXPORT_LANG]["jaz"]
-	 * module/foo/bar/jaz	--> Cgy\module\foo\Error ->$config[EXPORT_LANG]["bar"]["jaz"]
-	 * 						--> Cgy\module\foo\error\Bar ->$config[EXPORT_LANG]["jaz"]
+	 * foo/bar/jaz 		--> Cgy\error\Base ->$config[Request::current()->lang]["foo"]["bar"]["jaz"]
+	 * 					--> Cgy\error\Foo ->$config[Request::current()->lang]["bar"]["jaz"]
+	 * 					--> Cgy\error\foo\Bar ->$config[Request::current()->lang]["jaz"]
+	 * app/foo/bar/jaz  --> Cgy\App\foo\Error ->$config[Request::current()->lang]["bar"]["jaz"]
+	 * 					--> Cgy\App\foo\error\Bar ->$config[Request::current()->lang]["jaz"]
+	 * module/foo/bar/jaz	--> Cgy\module\foo\Error ->$config[Request::current()->lang]["bar"]["jaz"]
+	 * 						--> Cgy\module\foo\error\Bar ->$config[Request::current()->lang]["jaz"]
 	 */
 	public static function cls($key = null)
 	{
@@ -398,6 +435,7 @@ class Error
 			$key = str_replace("\\", "/", $key);
 			$key = str_replace(".", "/", $key);
 			$arr = explode("/", $key);
+			$oarr = array_merge($arr, []);	//copy 原输入
 			if (count($arr)>=3 && in_array(strtolower($arr[0]), ["app","module"])) {
 				//app/module custom error cls
 				array_splice($arr, 2,0, "error");
@@ -419,7 +457,7 @@ class Error
 				}
 			}
 			if ($idx<=0) {
-				return [ Cls::find("error/Base"), implode("/", $arr) ];
+				return [ Cls::find("error/Base"), implode("/", $oarr) ];
 			} else {
 				$arrs = [
 					array_slice($arr, 0, $idx),

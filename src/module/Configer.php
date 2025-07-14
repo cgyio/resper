@@ -101,15 +101,49 @@ class Configer
      * 外部访问 context
      * @param String $key context 字段 或 字段 path： 
      *      foo | foo/bar  -->  context["foo"] | context["foo"]["bar"]
+     * @param Mixed $data 可以指定新值，覆盖旧的设置值，默认 __empty__ 标识未指定
      * @return Mixed
      */
-    public function ctx($key = "")
+    public function ctx($key = "", $data="__empty__")
     {
-        if ($key=="") return $this->context;
-        if (!Is::nemstr($key)) return null;
-        $ctx = $this->context;
-        if (isset($ctx[$key])) return $ctx[$key];
-        return Arr::find($ctx, $key);
+        //确认是否指定了需要覆盖的新设置值
+        $nconf = $data!=="__empty__";
+        //原设置数组
+        $conf = $this->context;
+
+        if (!Is::nemstr($key)) {
+            //指定的设置项路径不是非空字符串
+            if ($key=="") {
+                //设置项路径为 空字符串
+                if ($nconf) {
+                    //覆盖原设置值
+                    $this->context = Arr::find($conf, $key, $data);
+                }
+                //返回完整的设置值
+                return $this->context;
+            }
+            return null;
+        }
+
+        if (isset($conf[$key])) {
+            //直接指定了某个设置项 键名
+            if ($nconf) {
+                //覆盖原设置值
+                $this->context[$key] = Arr::extend($conf[$key], $data);
+                return $this->context;
+            }
+            return $conf[$key];
+        }
+
+        if ($nconf) {
+            //覆盖原设置值
+            $this->context = Arr::find($conf, $key, $data);
+            //返回完整设置值
+            return $this->context;
+        }
+
+        //使用 Arr::find 方法，查找目标设置值，未找到返回 null
+        return Arr::find($conf, $key);
     }
 
     /**

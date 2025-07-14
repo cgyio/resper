@@ -24,7 +24,7 @@ class Cls extends Util
     public static function find($path = "", $ns = null)
     {
         if (!Is::nemstr($path) && !Is::nemarr($path)) return null;
-        $ns = !Is::nemstr($ns) ? (defined("NS") ? NS : "\\Cgy\\") : strtoupper($ns);
+        $ns = !Is::nemstr($ns) ? (defined("NS") ? NS : "Cgy\\") : strtoupper($ns);
         $ps = Is::nemstr($path) ? explode(",", $path) : $path;
         $cl = null;
         for ($i=0; $i<count($ps); $i++) {

@@ -128,7 +128,7 @@ class BaseConfig extends Configer
              */
             "operation" => [
                 //自定义 操作列表处理类，不指定使用默认的 \Cgy\uac\Operation
-                "handler" => "\\Cgy\\uac\\Operation",
+                "handler" => "Cgy\\uac\\Operation",
                 /**
                  * 可以指定 特殊的 操作列表，用于权限控制
                  */
@@ -145,7 +145,7 @@ class BaseConfig extends Configer
             //入站
             "in" => [
                 //中间件类全称，预定义一些通用的 中间件
-                "\\Cgy\\middleware\\in\\Secure",    //用户输入数据过滤
+                "Cgy\\middleware\\in\\Secure",    //用户输入数据过滤
             ],
             //出站
             "out" => [

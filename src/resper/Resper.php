@@ -55,6 +55,24 @@ class Resper extends ResperBase
     ];
 
     /**
+     * 定义 可以/不可以 作为响应方法的 方法名称列表
+     */
+    public static $methods = [
+        //不可以做为响应方法的 方法名
+        "except" => [
+            "init", "path", "cls", "conf", 
+            "addMiddlewares", "middlewareProcess",
+            "response", "responsePaused", "responseLogin", "responseTokenError",
+            "__construct"
+        ],
+
+        //可以作为响应方法的 方法名 这些都是一些通用的响应方法
+        "common" => [
+            "default", "empty", "uac", "db", "api", "error"
+        ],
+    ];
+
+    /**
      * 框架入口方法
      * 在 webroot/index.php 中执行 Resper::start([ ... ])
      * @param Array $opt 框架启动参数
@@ -403,18 +421,25 @@ class Resper extends ResperBase
         /**
          * !! 排除一些固定的 resper 实例方法，这些方法不能作为响应方法
          */
-        $except = [
-            "init", "path", "cls", 
-            "addMiddlewares", "middlewareProcess",
-            "response", "responsePaused", "responseLogin", "responseTokenError",
-            "__construct"
-        ];
+        $except = Resper::$methods["except"];
         if (!in_array($m, $except)) {
-            //响应方法必须是 实例方法/public方法
+            //响应方法必须是 实例方法/public方法，且必须包含注释 * resper
             $has = Cls::hasMethod($cls, $m, "public", function($mi) {
-                return $mi->isStatic() === false;
+                //必须是实例方法
+                if ($mi->isStatic()) return false;
+                $doc = $mi->getDocComment();
+                //方法必须包含 注释 * resper
+                if (strpos($doc, "* resper")!==false || strpos($doc, "* Resper")!==false) {
+                    return true;
+                }
+                return false;
             });
             if ($has) return [ $m, array_slice($uri, 1) ];
+        }
+
+        //检查是否是一些通用的 响应方法
+        if (in_array($m, Resper::$methods["common"])) {
+            return [ $m, array_slice($uri, 1) ];
         }
 
         //未找到有效的 响应方法 则返回默认方法 default
@@ -453,6 +478,64 @@ class Resper extends ResperBase
         }
         
         return false;
+    }
+
+
+
+    /**
+     * 响应者劫持
+     * 在某次响应会话内部，调用其他响应者 执行指定的响应方法，获取响应结果
+     * !! 以劫持的方式调用响应者，目的通常是调用这个响应者的某个实例响应方法，因此：
+     * !! 此响应者的 中间件/UAC权限控制/Log日志功能 将都不会启动，
+     * !! 同时此响应者也不会创建 response 响应实例，仅执行被劫持的响应方法，取得执行结果
+     * 
+     * 调用方式：     Resper::hijack("foo/bar/jaz", [ 前端 post 到后端的数据... ])
+     *              相当于 url访问：https://host/foo/bar/jaz  
+     * 
+     * !! 被劫持的响应者类，必须定义在当前 WEB_ROOT 目录下
+     * 通常是在某个 app 响应者类的响应方法中，访问另一个 app 响应者的某个方法
+     * 
+     * @param String|Array $uri 模拟访问的 URI 可以是 foo/bar/jaz 或者 ["foo", "bar", "jaz"]
+     * @param Array $post 模拟前端 post 来的数据
+     * @return Mixed 返回响应方法的执行结果 如果发生错误 返回 false
+     */
+    public static function hijack($uri, $post=[])
+    {
+        //根据输入的 URI 查找对应的 响应者/响应方法/方法参数
+        $ps = Resper::seek($uri);
+        //响应者类
+        $rcls = $ps["resper"] ?? null;
+        //响应方法
+        $rmethod = $ps["method"] ?? null;
+        //响应方法参数
+        $rargs = $ps["uri"] ?? [];
+        //排错
+        if (
+            !Is::nemstr($rcls) || !class_exists($rcls) ||
+            !Is::nemstr($rmethod)
+        ) {
+            //未找到有效的 响应者类/响应方法，直接返回 false
+            return false;
+        }
+
+        //以劫持方式 实例化响应者类
+        $resper = new $rcls([
+            //标记为 以劫持方式实例化
+            "hijack" => true,
+            //将响应参数写入 被劫持的响应者实例的 ownParams 属性中
+            "ownParams" => $ps
+        ]);
+        //临时添加 post 数据到 $request->inputs->context
+        if (!empty($post)) Request::current()->inputs->append($post);
+        //执行被劫持的响应方法
+        $result = $resper->response();
+        //恢复 post 数据为原数据
+        if (!empty($post)) Request::current()->inputs->reset();
+        //释放被劫持的响应者实例
+        $resper = null;
+
+        //返回被劫持响应方法的 执行结果
+        return $result;
     }
 
 }

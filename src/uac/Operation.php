@@ -459,7 +459,7 @@ class Operation
         $uri = $ps["uri"] ?? [];
 
         //请求的是 一些通用的的响应方法，统一处理
-        if (in_array($rm, ["default", "empty", "uac", "db", "api", "error"])) {
+        if (in_array($rm, Resper::$methods["common"])) {
             switch ($rm) {
                 case "default":
                 case "empty":

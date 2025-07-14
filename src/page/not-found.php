@@ -10,7 +10,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>Resper Not-Found</title>
-<link rel="stylesheet" href="/src/resper/main.css"/>
+<link rel="stylesheet" href="/src/resper/main.css?use=not-found"/>
 <link rel="icon" href="//io.cgy.design/icon/cgy-cgydesign-favicon.svg"/>
 </head>
 <body>

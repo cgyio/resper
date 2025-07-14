@@ -192,7 +192,7 @@ class Config extends Configer
     protected $defines = [
         "version" => "0.0.1",       //版本升级时修改
         "ds" => DIRECTORY_SEPARATOR,
-        "ns" => "\\Cgy\\",
+        "ns" => "Cgy\\",    //"\\Cgy\\",
         "ext" => ".php",
     ];
 

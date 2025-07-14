@@ -79,19 +79,56 @@ class Arr extends Util
 
     /**
      * 按 a/b/c or a.b.c 形式搜索多维数组，返回找到的值，未找到则返回null
+     * 如果指定了 $data 则使用 extend 方法修改原数组 $arr，返回修改后的数组
      * @param Array $arr
+     * @param String $key 要查询的多维数组的 键名路径
+     * @param Mixed $data 如果指定了此值，则使用此值，覆盖原数组中的值，返回修改后的 $arr，默认 __empty__ 标识未指定
      * @return Mixed
      */
-    public static function find($arr = [], $key = "")
+    public static function find($arr = [], $key = "", $data="__empty__")
     {
+        //确认是否指定了 $data 要覆盖的新键值
+        $hasdata = $data!=="__empty__";
+        //处理边界情况
+        //传入的原数组不是 非空数组，直接返回 null
         if (!Is::nemarr($arr)) return null;
         if (is_int($key)) {
-            if (isset($arr[$key])) return $arr[$key];
+            //传入的键名路径是 数字
+            if (isset($arr[$key])) {
+                //此数字是存在的 键名
+                if ($hasdata) {
+                    //覆盖原值
+                    $arr[$key] = Arr::extend($arr[$key], $data);
+                    return $arr;
+                }
+                return $arr[$key];
+            }
             return null;
         } else if (!Is::nemstr($key)) {
-            //return $arr;
-            return $key=="" ? $arr : null;
+            //输入的键名路径 不是非空字符串
+            if ($key=="") {
+                //输入空键名路径
+                if ($hasdata) {
+                    //覆盖原值
+                    $arr = Arr::extend($arr, $data);
+                    //return $arr;
+                }
+                return $arr;
+            }
+            return null;
         }
+
+        if ($hasdata) {
+            //指定了新值，使用新值，覆盖原数组
+            //按 键名路径 包裹新值，形成多维数组
+            $data = Arr::wrap($key, $data);
+            //调用 extend 方法，合并 新旧数组
+            $arr = Arr::extend($arr, $data);
+            //返回合并后数组
+            return $arr;
+        }
+
+        //未指定新值，按键名路径，查找多维数组
         $ctx = $arr;
         //当 key 中既包含 / 也包含 . 则以 / 作为分隔符
         if (strpos($key, ".")!==false && strpos($key, "/")!==false) {
@@ -122,6 +159,38 @@ class Arr extends Util
                     break;
                 }
             }
+        }
+        return $rst;
+    }
+
+    /**
+     * 按 a/b/c or a.b.c 形式将指定的 $val 包裹为多维数组
+     * a/b/c  -->  [ "a"=>[ "b"=>[ "c"=>$val ] ] ]
+     * @param String $xpath 数组键名 路径
+     * @param Mixed $val 要包裹的 键值
+     * @return Array 返回包裹后的数组 a/b/c  -->  [ "a"=>[ "b"=>[ "c"=>$val ] ] ]
+     */
+    public static function wrap($xpath, $val=null)
+    {
+        if (!Is::nemstr($xpath)) return [];
+        //当 xpath 中既包含 / 也包含 . 则以 / 作为分隔符
+        if (strpos($xpath, ".")!==false && strpos($xpath, "/")!==false) {
+            $karr = explode("/", $xpath);
+        } else {
+            if (strpos($xpath, ".")!==false) {
+                $karr = explode('.', $xpath);
+            } else if (strpos($xpath, "/")!==false) {
+                $karr = explode("/", $xpath);
+            } else {
+                $karr = [$xpath];
+            }
+        }
+        $rst = $val;
+        for ($i=count($karr)-1; $i>=0; $i--) {
+            $ki = $karr[$i];
+            $rst = [
+                $ki => $rst
+            ];
         }
         return $rst;
     }
@@ -180,7 +249,6 @@ class Arr extends Util
         return max($di);
     }
 
-//判断两个arr是否相等，如果是多维数组，则递归判断
     /**
      * 判断两个arr是否相等，如果是多维数组，则递归判断
      * @param Array $arr_a
