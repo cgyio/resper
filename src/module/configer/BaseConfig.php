@@ -11,10 +11,12 @@ use Cgy\Resper;
 use Cgy\module\Configer;
 use Cgy\orm\Driver;
 use Cgy\orm\Model;
+use Cgy\uac\Operation;
 use Cgy\util\Arr;
 use Cgy\util\Str;
 use Cgy\util\Is;
 use Cgy\util\Path;
+use Cgy\util\Cls;
 
 class BaseConfig extends Configer 
 {
@@ -42,42 +44,41 @@ class BaseConfig extends Configer
              */
             //是否启用 orm
             "enable" => false,
-            //数据库类型
-            "type" => "sqlite",
-            
-            /**
-             * 数据库相关路径参数，数据库配置文件/模型文件 所在路径
-             * 开发阶段 或 使用MySql数据库 数据库文件可能不存在，因此以数据库配置文件作为数据库存在的依据
-             * 如果在 dirs 路径下存在 config/Foo.json 则表示存在数据库 Foo
-             */
-            "dirs" => "root/library/db",    //必须使用绝对路径
-            "models" => "root/model",       //必须使用绝对路径
 
             /**
-             * !! mysql 数据库 必须的设置
-             * Medoo 库 连接 MySql 的参数
+             * 指定要使用的数据库配置
+             * 可以指定多个 不同位置/不同类型 的数据库
+             * !! 数据库配置文件的结构，参考 orm/temp/db_foo.json
              */
-            "mysql" => [
-                "host" => "127.0.0.1",
-                "port" => 3306,
-                "database" => "",
-                "username" => "",
-                "password" => "",
+            "dbs" => [
+                /* 
+                !! 键名必须与配置文件中的实际数据库名称一致
+                "db_foo" => [
+                    !! 必须指定数据库配置文件的绝对路径，包括文件名，可以不要后缀（配置文件后缀，在 Driver 基类中定义）
+                    "config" => "root/library/db/db_foo[.json]",
 
-                "charset" => "utf8mb4",                 //字符集
-	            "collation" => "utf8mb4_general_ci",    //排序方式
-
-                //更多参数 参考 Medoo 库
-                //...
+                    !! 此处指定的其他参数，将覆盖 数据库配置文件中 同名项目的值
+                    "type" => "mysql",
+                    "mysql" => [
+                        ...
+                    ],
+                    "modelPath" => "root/model/db_foo", 数据模型类定义位置 绝对路径
+                    "modelRequired" => [
+                        ...
+                    ],
+                ],
+                ... 可定义多个数据库
+                */
             ],
 
             /**
-             * !! 可选的
+             * 可定义哪些数据库是必须的
+             * 在 Orm 实例创建之后，这些数据库也必须立即初始化
              */
-            //默认必须加载的数据库模型(表) 名称
             "required" => [
-                //"usr"
+                //"db_foo",
             ],
+
         ],
 
         //权限控制参数
@@ -145,11 +146,25 @@ class BaseConfig extends Configer
             //入站
             "in" => [
                 //中间件类全称，预定义一些通用的 中间件
-                "Cgy\\middleware\\in\\Secure",    //用户输入数据过滤
+                "Cgy\\middleware\\in\\IpFilter",    //ip 入站过滤
+                "Cgy\\middleware\\in\\Secure",      //用户输入数据过滤
             ],
             //出站
             "out" => [
                 //中间件类全称
+            ],
+
+            //与中间件相关的 预设参数
+            /**
+             * ip地址过滤参数
+             */
+            "Cgy\\middleware\\in\\IpFilter" => [
+                //ip 过滤类型 false|black|white
+                "filter" => 'black',
+                //黑名单配置文件路径，绝对路径
+                "black" => "root/library/ip/black.json",
+                //白名单配置文件路径，绝对路径
+                "white" => "root/library/ip/white.json",
             ],
         ],
     ];
@@ -162,6 +177,7 @@ class BaseConfig extends Configer
     protected $init = [
         
     ];
+
 
 
     /**
@@ -198,9 +214,70 @@ class BaseConfig extends Configer
         }
 
         /**
+         * 解析 任意类型 resper 响应者类中定义的 可用于响应请求的 resper 响应方法
+         */
+        $this->parseResperMethods();
+
+        /**
          * 各类型 resper 响应者 参数配置器类 在此处 执行其他处理方法
          */
         return $this->afterSetConf();
+    }
+
+    /**
+     * 解析 任意类型 resper 响应者类中 定义的 resper 响应方法 | api 方法 必须在注释中包含 * resper | * api 的 public 方法
+     * 解析得到的此响应者类 可用的 响应方法 信息数组 保存到 $this->context["respers"]
+     * !! 子类可覆盖此方法
+     * @return $this
+     */
+    protected function parseResperMethods()
+    {
+        //获取此 config 实例对应的 响应者 类全称 NS\app\FooBar
+        $rcls = $this->getResperCls();
+        //对应响应者的 类名 FooBar
+        $rn = Cls::name($rcls);
+
+        //响应者类型
+        $locls = strtolower($rcls);
+        $rtype = strpos($locls,"app")!==false ? "app" : (strpos($locls,"module")!==false ? "module" : "resper");
+        //根据 类全称 解析得到 操作标识 前缀
+        $oprpre = Operation::getResperOperatePrefix($rcls);
+        //获取 响应者类 定义的 intr 属性的值
+        $rcps = Cls::ref($rcls)->getDefaultProperties();
+        $rintr = $rcps["intr"] ?? Str::camel($rn, true);
+        $rintr = ($rtype=="app" ? "[应用]" : ($rtype=="module" ? "[模块]" : "[自定义]")).$rintr;
+
+        //在 响应者类中 查找 public,&!static 方法，且 注释中带有 * resper 标记的方法
+        $rms = Cls::specific(
+            $rcls,
+            "public,&!static",
+            "resper",
+            null,
+            function($mi, $conf) use ($oprpre, $rintr) {
+                //为这些方法添加 uac 相关信息
+                $conf = Cls::parseMethodInfoWithUac($mi, $conf, $oprpre, $rintr);
+                return $conf;
+            }
+        );
+
+        //在 响应者类中 查找 public,&!static 方法，且 注释中带有 * api 标记 以及方法名带有 -Api后缀 的方法
+        $apis = Cls::specific(
+            $rcls,
+            "public,&!static",
+            "api",
+            null,
+            function($mi, $conf) use ($oprpre, $rintr) {
+                //为这些方法添加 uac 相关信息
+                $conf = Cls::parseMethodInfoWithUac($mi, $conf, "api/".$oprpre, $rintr);
+                return $conf;
+            }
+        );
+
+        //写入 $this->context 中
+        $this->context["respers"] = $rms;
+        $this->context["apis"] = $apis;
+
+        return $this;
     }
 
     /**
@@ -227,39 +304,26 @@ class BaseConfig extends Configer
     {
         $ctx = $this->context;
         $ormc = $ctx["orm"];
-        //如果未指定 orm 参数，直接返回
-        if (!Is::nemarr($ormc)) return $this;
-        $enable = $ormc["enable"] ?? false;
-        //如果未启用 orm，直接返回
-        if (!is_bool($enable) || $enable!==true) return $this;
-
-        //取得 dbtype
-        $dbtp = $ormc["type"] ?? (defined("DB_TYPE") ? DB_TYPE : "sqlite");
-
-        /**
-         * 根据 dbtype 数据库类型，计算数据库参数
-         */
-        //var_dump("Driver::initOrmConf()");
-        //var_dump($ormc);
-        $driver = Driver::support($dbtp);
-        if ($driver===false) {
-            //不支持此类型数据库，直接返回
+        //如果未指定 orm 参数
+        if (!Is::nemarr($ormc)) {
+            //填充默认关闭的 orm 参数，然后返回
+            $this->context["orm"] = [
+                "enable" => false
+            ];
             return $this;
         }
-        $ormc["type"] = $dbtp;
-        //调用数据库模型的 initOrmConf() 方法，得到数据库参数 [path=>'数据库文件参数', dbns=>[可用数据库名称数组], ...]
-        $ormc = Arr::extend($ormc, $driver::initOrmConf($ormc));
-        //var_dump($ormc);
+        $enable = $ormc["enable"] ?? false;
+        $dbs = $ormc["dbs"] ?? [];
+        //如果未启用 orm，或 未指定要使用的数据库
+        if (!is_bool($enable) || $enable!==true || !Is::nemarr($dbs) || !Is::associate($dbs)) {
+            //关闭 orm 清空 dbs 预设
+            $this->context["orm"] = [
+                "enable" => false,
+                "dbs" => []
+            ];
+        }
 
-        /**
-         * 处理预设的 model 模型文件路径，得到模型相关参数
-         */
-        $ormc["model"] = Model::initOrmConf($ormc);
-        //var_dump($ormc["model"]);
-        
-        //将解析后的参数写入 $this->context
-        $this->context["orm"] = $ormc;
-
+        //orm 参数不需要其他预处理，在 Orm 实例化时，由 Orm 类自行处理
         return $this;
     }
     //处理 $this->init["uac"]
@@ -272,8 +336,9 @@ class BaseConfig extends Configer
         //如果未启用 orm ，则 uac 无法启用
         if (!Is::nemarr($ormc) || $ormEnable!==true) {
             //将 uac 的 enable 设为 false
-            $uacc["enable"] = false;
-            $this->context["uac"] = $uacc;
+            $this->context["uac"] = [
+                "enable" => false
+            ];
         }
         //uac 参数不需要其他预处理，在 Uac 实例化时，由 Uac 类自行处理
         return $this;
@@ -285,6 +350,8 @@ class BaseConfig extends Configer
         $mid = $ctx["middleware"] ?? [];
         $in = $mid["in"] ?? [];
         $out = $mid["out"] ?? [];
+        unset($mid["in"]);
+        unset($mid["out"]);
         if (!Is::nemarr($in) && !Is::nemarr($out)) return $this;
         if (Is::nemarr($in)) {
             $nin = [];
@@ -305,12 +372,63 @@ class BaseConfig extends Configer
             $out = $nout;
         }
         //写入处理后的参数
-        $this->context["middleware"] = [
+        $this->context["middleware"] = Arr::extend($mid, [
             "in" => $in,
             "out" => $out
-        ];
+        ]);
+
+        //取得所有定义的 中间件 类全称 列表
+        $all = array_merge([], $in, $out);
+        //循环调用 这些中间件的 initConf 预设参数初始化处理方法
+        foreach ($all as $mclsn) {
+            //如果未定义 此中间件的参数，跳过
+            if (!isset($this->context["middleware"][$mclsn])) continue;
+            //调用中间件自定义的 预设参数初始化处理方法
+            $mc = $mclsn::initConf($this->context["middleware"][$mclsn]);
+            //处理后的参数 写回 context
+            if (Is::nemarr($mc)) {
+                $this->context["middleware"][$mclsn] = $mc;
+            }
+        }
 
         return $this;
+    }
+
+
+
+    /**
+     * 获取此 config 实例对应的 响应者类全称
+     * 对于 Resper 类型的 自定义响应者类，直接有属性 $this->rcls 储存了对应 响应者类全称，
+     * 其他类的 响应者类的类全称，需要通过解析当前 config 类全称 来获取
+     * @return String|null 对应 响应者类全称
+     */
+    protected function getResperCls()
+    {
+        if (isset($this->rcls)) {
+            $rcls = $this->rcls;
+            if (Is::nemstr($rcls) && class_exists($rcls)) return $rcls;
+            return null;
+        }
+
+        //根据当前 FooConfig 类全称，解析得到对应的 响应者类全称
+        $clsn = get_class($this);
+        $clsa = explode("\\", $clsn);
+        /**
+         * 去除当前类名，响应者类名 和 对应的 config 类名的 对应关系为：
+         *  resper:     NS\Foo          --> NS\foo\Config
+         *  module:     NS\module\Foo   --> NS\module\foo\Config
+         *  app:        NS\app\FooBar   --> NS\app\foo_bar\Config
+         */
+        /*$cclsn = */array_pop($clsa);
+        //响应者路径名 foo_bar 形式
+        $rn = array_pop($clsa);
+        //转为响应者类名  foo_bar  -->  FooBar
+        $clsa[] = Str::camel($rn, true);
+        //连接得到 对应响应者类全称
+        $rcls = implode("\\", $clsa);
+        //如果此类不存在，直接返回
+        if (!class_exists($rcls)) return null;
+        return $rcls;
     }
 
 }

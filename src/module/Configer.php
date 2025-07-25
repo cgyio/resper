@@ -6,10 +6,20 @@
 namespace Cgy\module;
 
 use Cgy\util\Is;
+use Cgy\util\Str;
 use Cgy\util\Arr;
+use Cgy\util\Path;
+use Cgy\util\Conv;
+
+use Cgy\module\configer\traits\runtimeCache;
 
 class Configer 
 {
+    /**
+     * 使用 runtime 缓存相关功能
+     */
+    use runtimeCache;
+
     /**
      * 预设的设置参数
      * !! 子类自定义
@@ -24,6 +34,29 @@ class Configer
 
     //已定义的常量
     public static $cnsts = [];
+
+    /**
+     * runtimeCache trait 要求的属性
+     * 已在 trait 中定义
+     */
+    //public $runtimeCache = "";
+    //protected $rcTimeKey = "__CACHE_TIME__";
+    //protected $rcSignKey = "__USE_CACHE__";
+    //protected $rcExpired = 60*60;    //缓存更新的时间间隔，1h
+
+    /**
+     * 默认配置文件后缀名，默认 .json
+     * !! 子类可覆盖
+     * 可通过定义 XX_CONFEXT 形式的常量 来覆盖此参数
+     */
+    public static $confExt = ".json";
+    /**
+     * 支持的 配置文件后缀名
+     * !! 子类不要覆盖
+     */
+    public static $confExts = [
+        ".json", ".xml", ".yaml", ".yml",
+    ];
 
     /**
      * 构造
@@ -80,6 +113,11 @@ class Configer
     public function __get($key)
     {
         /**
+         * $this->ctx  --> $this->context
+         */
+        if ($key=="ctx") return $this->context;
+
+        /**
          * $this->field  -->  $this->context[field]
          */
         if (isset($this->context[$key])) {
@@ -95,6 +133,24 @@ class Configer
             $k = substr($key, 1);
             return $this->init[$k];
         }
+
+        /**
+         * $this->origin  -->  $this->opt
+         * 访问传入的用户自定义参数
+         * 即 此类的构造函数的参数
+         * 保存在 $this->opt 中
+         */
+        if ($key == "origin") {
+            if (!is_null($this->opt)) return $this->opt;
+        }
+
+        /**
+         * runtime 运行时缓存相关
+         */
+        if ($key=="cached") return $this->context[$this->rcSignKey] ?? false;
+        if ($key=="cachetime") return $this->context[$this->rcTimeKey] ?? 0;
+
+        return null;
     }
 
     /**
@@ -206,6 +262,35 @@ class Configer
         return true;
     }
 
+    /**
+     * 从缓存中读取数据
+     * runtime 运行时缓存数据 == $this->context 
+     * @param String $path 缓存文件路径，不指定则使用 $this->runtimeCache 默认 null 
+     * @return Array|null
+     */
+    /*public function getRuntimeContext($path=null)
+    {
+        //缓存文件路径
+        $path = Is::nemstr($path) ? $path : $this->runtimeCache;
+        return static::getRuntimeContextByPath($path);
+    }*/
+
+    /**
+     * 将当前解析得到的参数数据，缓存到 runtime 运行时参数缓存文件中
+     * @param Array $conf 参数数据，不指定则使用 $this->context，默认 null
+     * @param String $path 缓存文件路径，不指定则使用 $this->runtimeCache，默认 null
+     * @return Bool
+     */
+    /*public function cacheRuntimeContext($conf=null, $path=null)
+    {
+        //缓存文件路径
+        $path = Is::nemstr($path) ? $path : $this->runtimeCache;
+        //处理要写入缓存的数据
+        $conf = Is::nemarr($conf) ? $conf : $this->context;
+        return static::cacheRuntimeContextByPath($conf, $path);
+
+    }*/
+
 
 
     /**
@@ -234,6 +319,31 @@ class Configer
             }
         }
         return $defs;
+    }
+
+    /**
+     * 自动补全配置文件后缀名
+     * @param String $path 配置文件路径
+     * @param String $for 此配置文件的用途，db|app|cache... 相应的需要定义 CONFEXT_[DB|APP|CACHE...] 形式的常量，来覆盖默认后缀名
+     * @return String 补全后的文件路径
+     */
+    protected static function autoSuffix($path, $for="db")
+    {
+        if (!Is::nemstr($path)) return $path;
+        //获取默认后缀名
+        $cnst = "CONFEXT_".strtoupper($for);
+        $ext = defined($cnst) ? constant($cnst) : static::$confExt;
+        //支持的配置文件后缀名
+        $exts = defined("CONFEXT_SUPPORT") ? Arr::mk(CONFEXT_SUPPORT) : static::$confExts;
+        //自动补全
+        if (strpos($path, ".")===false) return $path.$ext;
+        //获取当前路径的后缀名
+        $pi = pathinfo($path);
+        $cext = ".".$pi["extension"];
+        //如果已有 被支持的后缀名，不补全，直接返回
+        if (in_array(strtolower($cext), $exts)) return $path;
+        //否则 补全并返回
+        return $path.$ext;
     }
     
 }

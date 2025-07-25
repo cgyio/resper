@@ -81,10 +81,39 @@ class Config extends Configer
         "db" => [
             //"base"      => "library/db",    //db path for current website, cover PATH
             "type"      => "sqlite",        //default DB type, [mysql, sqlite, ...] 
+            "ext"       => ".db",           //如果使用sqlite数据库，定义数据库文件后缀名，默认 .db
+            "confext"   => ".json",         //数据库配置文件后缀名，默认 .json
             "route"     => "dbm",           //默认的 db 管理路由，各站点可根据需求 extend 此路由，并在此指定新路由 name（类名称）
             "formui"    => "Elementui",     //default frontend From UI-framework
         ],
 
+        /**
+         * 常用文件后缀名
+         * !! 尽量使用默认设置
+         */
+        //类文件默认后缀名，将覆盖 defines 中的项目
+        "ext" => ".php",
+        //配置文件后缀名
+        "confext" => [
+            //支持的配置文件后缀名
+            "support"   => ".json,.xml,.yaml,.yml",
+
+            "cache"     => ".json",         //配置参数缓存文件后缀名
+            "db"        => ".json",         //数据库 配置文件后缀名
+            "app"       => ".json",         //应用 配置文件后缀名
+            "module"    => ".json",         //模块 配置文件后缀名
+            "resper"    => ".json",         //通用响应者 配置文件后缀名
+        ],
+
+        /**
+         * 静态常量
+         * !! 用户可在启动时 修改这些参数
+         * 将覆盖 defines 数组中的项目
+         */
+        //路径分隔符，unix 系统：/   windows 系统：\
+        "ds" => DIRECTORY_SEPARATOR,
+        //namespace 前缀
+        "ns" => "Cgy\\",
         
 
         /**
@@ -110,6 +139,8 @@ class Config extends Configer
             "pause" => false,	
             //日志开关
             "log" => false,
+            //缓存开关，开启后 所有参数处理类 将优先使用缓存的数据
+            "cache" => true,
 
             //其他 web 参数
 
@@ -205,6 +236,9 @@ class Config extends Configer
     //各 app 的 configer 实例
     public $app = null;
 
+    //缓存的 runtime 参数，临时存放
+    public $_rc = null;
+
     /**
      * 在 应用用户设置后 执行
      * !! 覆盖父类
@@ -220,6 +254,21 @@ class Config extends Configer
         $this->initWebPath();
         //定义 特殊路径 DIR_***
         $this->initSpecialPath();
+        //处理 php 预设参数
+        $this->initPhpConf();
+        //定义 web 常量 WEB_***
+        $this->initWebCnst();
+
+        /**
+         * 指定 runtime 参数缓存位置
+         * !! 通过 Resper::start([...]) 注入的 网站启动参数，runtime 参数缓存在：
+         * !! [webroot]/runtime/web[.json] 中
+         */
+        $this->runtimeCache = ROOT_PATH.DS."runtime".DS."web";
+        //直接尝试读取缓存的 runtime 参数，如果有缓存 则保存在 $this->_rc 临时属性中
+        $rc = $this->getRuntimeContext();
+        //var_dump($rc);var_dump(1212);
+        if (Is::nemarr($rc)) $this->_rc = $rc;
 
         return $this;
     }
@@ -230,8 +279,21 @@ class Config extends Configer
      */
     protected function initStatic()
     {
+        /**
+         * 处理固定常量，可通过 Resper::start([...]) 覆盖这些预定义常量
+         * version|ds|ns|ext
+         */
+        //合并 可能被重新定义的 defines 中的项目
+        foreach ($this->context as $k => $v) {
+            if (isset($this->defines[$k])) {
+                $this->defines[$k] = $v;
+                //在原位置删除
+                unset($this->context[$k]);
+            }
+        }
         //定义 固定常量
         self::def($this->defines);
+
         //定义 系统路径常量
         $pre = Path::fix(__DIR__.DS."..".DS."..".DS."..".DS."..".DS."..");
         $vdp = $pre.DS."vendor";
@@ -295,44 +357,69 @@ class Config extends Configer
 
     /**
      * 初始化
+     * 处理定义在 php 项下的预设参数
+     * @return $this
+     */
+    protected function initPhpConf()
+    {
+        $phpc = $this->ctx("php");
+        if (isset($phpc["error_reporting"])) {
+            //0/-1 = 关闭/开启
+            @error_reporting($phpc["error_reporting"]);
+        }
+        if (isset($phpc["timezone"])) {
+            //时区
+            @date_default_timezone_set($phpc["timezone"]);
+        }
+        if (isset($phpc["ini_set"])) {
+            //ini_set
+            $ist = $phpc["ini_set"];
+            if (Is::nemarr($ist)) {
+                foreach ($ist as $k => $v) {
+                    ini_set($k, $v);
+                }
+            }
+        }
+        return $this;
+    }
+
+    /**
+     * 初始化
+     * 定义 web 常量 WEB_***
+     * @return $this
+     */
+    protected function initWebCnst()
+    {
+        $webc = $this->ctx("web");
+        if ($webc["key"]=="") {
+            //从预定义的 webroot 路径获取当前 web 应用的 key
+            $webc["key"] = strtolower(array_slice(explode("/",$webc["root"]), -1)[0]);
+        }
+        //定义常量
+        self::def($webc, "web");
+        return $this;
+    }
+
+    /**
+     * 初始化
      * 处理 context 中的各项 设置内容
      * @return $this
      */
     public function initConf()
     {
         $ctx = $this->context;
-        //自定义的 Resper 响应者类列表
-        $respers = [];
         foreach ($ctx as $k => $v) {
-            //dir 已定义
-            if ($k=="dir") continue;
+            //dir|php|web 项下参数已处理过
+            if (in_array($k, ["dir","php","web"])) continue;
+
+            //开始处理其他 设置项
             $m = "init".ucfirst(strtolower($k))."Conf";
             if (method_exists($this, $m)) {
-                //定义了设置项处理方法
+                //定义了设置项处理方法 php|web|module|app
                 $this->$m($v);
             } else if (Resper::has($k)!==false) {
-                /**
-                 * 针对自定义 resper 响应者
-                 * 建立 Resper configer 实例
-                 * 如果参数中定义了 config 类，直接使用
-                 * 否则 使用 ResperConfig 类 
-                 */
-                $ccls = $v["config"] ?? null;
-                if (Is::nemstr($ccls) && class_exists($ccls)) {
-                    //参数定义了 config 类，实例化
-                    unset($v["config"]);
-                    $cfg = new $ccls($v);
-                } else {
-                    //未定义 config，直接使用 ResperConfig 类
-                    $cfg = new ResperConfig($v);
-                }
-                //将 处理完的参数 写入 context
-                $ctx = $cfg->ctx();
-                $this->context = Arr::extend($this->context, [
-                    $k => $ctx
-                ]);
-                //保存 ResperConfig 实例
-                $respers[$k] = $cfg;
+                //初始化自定义 resper 响应者的 参数
+                $this->initResperConf($v, $k);
             } else {
                 //未定义处理方法，则默认定义为 常量
                 //以 item 名称作为常量前缀
@@ -340,45 +427,23 @@ class Config extends Configer
                 self::def($v, $k);
             }
         }
-        if (Is::nemarr($respers)) {
-            //所有自定义 resper 响应者类的 configer 实例，保存到 $this->resper
-            $this->resper = (object)$respers;
+
+        if (Is::nemarr($this->resper)) {
+            //以对象形式 访问 $this->resper 中保存的 configer 实例
+            $rsp = $this->resper;
+            $this->resper = (object)$rsp;
         }
-        return $this;
-    }
-    // initPhpConf 执行初始 php 设置
-    protected function initPhpConf($conf = [])
-    {
-        if (isset($conf["error_reporting"])) {
-            //0/-1 = 关闭/开启
-            @error_reporting($conf["error_reporting"]);
-            //unset($conf["error_reporting"]);
+
+        if (!Is::nemarr($this->_rc)) {
+            //如果不存在缓存数据，尝试写入缓存
+            $this->cacheRuntimeContext();
+        } else {
+            //如果存在缓存，则将 缓存数据写入 $this->context
+            $this->context = Arr::copy($this->_rc);
+            //释放临时属性
+            $this->_rc = null;
         }
-        if (isset($conf["timezone"])) {
-            //时区
-            @date_default_timezone_set($conf["timezone"]);
-            //unset($conf["timezone"]);
-        }
-        if (isset($conf["ini_set"])) {
-            //ini_set
-            $ist = $conf["ini_set"];
-            if (Is::nemarr($ist)) {
-                foreach ($ist as $k => $v) {
-                    ini_set($k, $v);
-                }
-            }
-            //unset($conf["ini_set"]);
-        }
-        return $this;
-    }
-    // initWebConf 初始化 web 参数
-    protected function initWebConf($conf = [])
-    {
-        if ($conf["key"]=="") {
-            $conf["key"] = strtolower(array_slice(explode("/",$conf["root"]), -1)[0]);
-        }
-        //定义常量
-        self::def($conf, "web");
+        
         return $this;
     }
     // initModuleConf 初始化 各 module config
@@ -387,32 +452,58 @@ class Config extends Configer
         $mco = [];
         $mds = MODULE_PATH;
         $mdh = @opendir($mds);
-        while (($md = @readdir($mdh)) !== false) {
-            if ($md=="." || $md=="..") continue;
-            $mdp = $mds.DS.$md;
-            if (!is_dir($mdp)) continue;
-            //模块名 必须小写
-            $mdn = strtolower($md);
-            //获取 module/Config 设置类
-            $cls = Cls::find("module/".$mdn."/Config");
-            if (empty($cls)) continue;
-            //读取用户设置项
-            $opt = $this->ctx("module/".$mdn);
-            if (!Is::nemarr($opt)) {
-                $opt = [];
+
+        if (Is::nemarr($this->_rc)) {
+            //如果存在缓存，则便利 module 文件夹，生成各 module 对应的 Configer 实例，将缓存的数据 写入 context
+            $rcmd = $this->_rc["module"] ?? [];
+            while (($md = @readdir($mdh)) !== false) {
+                if ($md=="." || $md=="..") continue;
+                $mdp = $mds.DS.$md;
+                if (!is_dir($mdp)) continue;
+                //模块名 必须小写
+                $mdn = strtolower($md);
+                //此模块的 缓存的 参数
+                $mdc = $rcmd[$mdn] ?? null;
+                //没有此模块的缓存参数，跳过
+                if (!Is::nemarr($mdc)) continue;
+                //创建此模块的 config 实例
+                $cfg = new Configer();
+                $cfg->context = Arr::copy($mdc);
+                
+                //保存 module configer 实例
+                $mco[$mdn] = $cfg;
             }
-            //建立 module configer 实例
-            $cfg = new $cls($opt);
-            //将 module 参数 写入 context
-            $this->context = Arr::extend($this->context, [
-                "module" => [
-                    $mdn => $cfg->ctx()
-                ]
-            ]);
-            //保存 module configer 实例
-            $mco[$mdn] = $cfg;
+        } else {
+            //不存在缓存数据，则开始初始化模块参数
+            while (($md = @readdir($mdh)) !== false) {
+                if ($md=="." || $md=="..") continue;
+                $mdp = $mds.DS.$md;
+                if (!is_dir($mdp)) continue;
+                //模块名 必须小写
+                $mdn = strtolower($md);
+                //获取 module/Config 设置类
+                $cls = Cls::find("module/".$mdn."/Config");
+                if (empty($cls)) continue;
+                //读取用户设置项
+                $opt = $this->ctx("module/".$mdn);
+                if (!Is::nemarr($opt)) {
+                    $opt = [];
+                }
+                //建立 module configer 实例
+                $cfg = new $cls($opt);
+                //将 module 参数 写入 context
+                $this->context = Arr::extend($this->context, [
+                    "module" => [
+                        $mdn => $cfg->ctx()
+                    ]
+                ]);
+                //保存 module configer 实例
+                $mco[$mdn] = $cfg;
+            }
         }
+
         @closedir($mdh);
+
         //各 module configer 实例缓存到 $this
         $this->module = (object)$mco;
 
@@ -437,39 +528,102 @@ class Config extends Configer
         $aco = [];
         $apd = APP_PATH;
         $aph = @opendir($apd);
-        while (($app = @readdir($aph)) !== false) {
-            if ($app=="." || $app=="..") continue;
-            $appd = $apd.DS.$app;
-            if (!is_dir($appd)) continue;
-            //app 名称 必须小写
-            $apn = strtolower($app);
-            if (!file_exists($appd.DS.ucfirst($apn).EXT)) continue;
-            //获取 App/apn/Config 设置类
-            $cls = Cls::find("App/".$apn."/Config");
-            if (empty($cls)) continue;
-            //读取用户设置项
-            $opt = $this->ctx("app/".$apn);
-            if (!Is::nemarr($opt)) {
-                $opt = [];
+
+        if (Is::nemarr($this->_rc)) {
+            //如果存在缓存数据，则遍历 app 文件夹，为各 app 创建 configer 实例，将缓存数据写入 context
+            $rcad = $this->_rc["app"] ?? [];
+            while (($app = @readdir($aph)) !== false) {
+                if ($app=="." || $app=="..") continue;
+                $appd = $apd.DS.$app;
+                if (!is_dir($appd)) continue;
+                //app 名称 必须小写
+                $apn = strtolower($app);
+                //此 app 的缓存数据
+                $apc = $rcad[$apn] ?? null;
+                //如果此 app 没有缓存数据，则跳过
+                if (!Is::nemarr($apc)) continue;
+                //创建 此 app 的 config 实例
+                $cfg = new Configer();
+                $cfg->context = Arr::copy($apc);
+                
+                //保存 module configer 实例
+                $aco[$apn] = $cfg;
             }
-            //建立 app configer 实例
-            $cfg = new $cls($opt);
-            //将 app 参数 写入 context
-            $this->context = Arr::extend($this->context, [
-                "app" => [
-                    $apn => $cfg->ctx()
-                ]
-            ]);
-            //var_dump($cfg->ctx());
-            //保存 module configer 实例
-            $aco[$apn] = $cfg;
+        } else {
+            //如果不存在缓存，则开始 初始化 app 参数
+            while (($app = @readdir($aph)) !== false) {
+                if ($app=="." || $app=="..") continue;
+                $appd = $apd.DS.$app;
+                if (!is_dir($appd)) continue;
+                //app 名称 必须小写，必须存在 app 类文件
+                $apn = strtolower($app);
+                if (!file_exists($appd.DS.ucfirst($apn).EXT)) continue;
+                //获取 App/apn/Config 设置类
+                $cls = Cls::find("App/".$apn."/Config");
+                if (empty($cls)) continue;
+                //读取用户设置项
+                $opt = $this->ctx("app/".$apn);
+                if (!Is::nemarr($opt)) {
+                    $opt = [];
+                }
+                //建立 app configer 实例
+                $cfg = new $cls($opt);
+                //将 app 参数 写入 context
+                $this->context = Arr::extend($this->context, [
+                    "app" => [
+                        $apn => $cfg->ctx()
+                    ]
+                ]);
+                //var_dump($cfg->ctx());
+                //保存 module configer 实例
+                $aco[$apn] = $cfg;
+            }
         }
+
         @closedir($aph);
         //各 app configer 实例缓存到 $this
         $this->app = (object)$aco;
         
         //定义常量 前缀：APP_
         //self::def($this->ctx("app"), "app");
+
+        return $this;
+    }
+    // initResperConf 初始化 各 自定义响应者 resper config
+    protected function initResperConf($conf=[], $resperName)
+    {
+        if (Is::nemarr($this->_rc)) {
+            //如果存在 runtime 缓存
+            $rcd = $this->_rc[$resperName] ?? [];
+            //建立 Configer 实例，并将缓存的数据 写入 context
+            $cfg = new Configer();
+            $cfg->context = Arr::copy($rcd);
+        } else {
+            //不存在缓存，则初始化此 自定义 resper 响应者的参数
+            /**
+             * 针对自定义 resper 响应者
+             * 建立 Resper configer 实例
+             * 如果参数中定义了 config 类，直接使用
+             * 否则 使用 ResperConfig 类 
+             */
+            $ccls = $conf["config"] ?? null;
+            if (Is::nemstr($ccls) && class_exists($ccls)) {
+                //参数定义了 config 类，实例化
+                unset($conf["config"]);
+                $cfg = new $ccls($conf, $resperName);
+            } else {
+                //未定义 config，直接使用 ResperConfig 类
+                $cfg = new ResperConfig($conf, $resperName);
+            }
+            //将 处理完的参数 写入 context
+            $ctx = $cfg->ctx();
+            $this->context = Arr::extend($this->context, [
+                $resperName => $ctx
+            ]);
+        }
+
+        //保存 ResperConfig 实例
+        $this->resper[$resperName] = $cfg;
 
         return $this;
     }

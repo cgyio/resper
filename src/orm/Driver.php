@@ -7,59 +7,22 @@ namespace Cgy\orm;
 
 use Cgy\orm\Db;
 use Cgy\util\Is;
+use Cgy\util\Arr;
+use Cgy\util\Str;
 use Cgy\util\Path;
 use Cgy\util\Cls;
 use Cgy\util\Conv;
 
 class Driver extends Db
 {
-    //数据库配置文件后缀名
-    public static $confExt = ".json";
-
 
     /**
      * !! 必须实现 !!
      */
 
     /**
-     * 根据 Orm 参数，解析获取数据库相关的必须参数
-     * @param Array $conf Orm 参数
-     * @return Array 数据库路径，文件地址等必要参数 [ path=>'', dbns=>[ 路径下所有可用数据库 名称数组 ], ... ]
-     */
-    public static function initOrmConf($conf = [])
-    {
-
-        return [
-            "path" => "",
-            "dbns" => []
-        ];
-    }
-
-    /**
-     * 根据 Orm 参数，创建每个 Db 的 Medoo 连接参数
-     * @param Array $conf Orm 参数
-     * @return Array Medoo 连接参数 [ dbn => [ type=>"", database=>"", host=>"", ... ], ... ]
-     */
-    public static function initMedooParams($conf = [])
-    {
-
-        return [];
-    }
-
-    /**
-     * 创建某个数据库 key
-     * @param Array $opt Medoo 连接参数
-     * @return String DB_KEY 
-     */
-    public static function dbkey($opt = [])
-    {
-
-        return "";
-    }
-    
-    /**
      * 数据库连接方法
-     * @param Array $opt medoo 连接参数
+     * @param Array $opt 数据库配置参数，由 orm/Config 类处理过的 保存在 Orm::$current->config->dbn 中
      * @return Db 数据库实例
      */
     public static function connect($opt=[])
@@ -105,78 +68,28 @@ class Driver extends Db
 
 
     /**
-     * 静态方法
-     */
-
-    /**
-     * 解析 orm 参数中的 dirs 得到真实存在的 数据库路径
-     * @param String $dirs 在预设中指定的 orm 参数中的 dirs 数据库路径
-     * @return Mixed 路径解析成功 则返回真实路径 否则返回 null
-     */
-    public static function parseDirs($dirs)
-    {
-        if (!Is::nemstr($dirs)) return null;
-        $dirs = explode(",", trim($dirs, ","));
-        $dbp = Path::exists($dirs, [
-            "checkDir" => true,
-            "all" => false
-        ]);
-        if (empty($dbp)) $dbp = Path::find("root/library/db", ["checkDir"=>true]);
-        if (empty($dbp)) return null;
-        return $dbp;
-    }
-
-    /**
-     * 在指定的 db 路径下，查找可用的 数据库列表
-     * 在开发阶段 或 使用 MySql 数据库 情况下，可能不存在数据库文件
-     * 因此通过检查 数据库配置文件 来确定 数据库列表
-     * 数据库配置文件应保存在 [dbpath]/config/Dbn.json
-     * 
-     * @param String $path 参数中指定的 数据库路径
-     * @param String $dbtype 不同的数据库类型 sqlite/mysql 
-     * @return Array [ db1, db2, ... ]
-     */
-    public static function findDbnsIn($path, $dbtype="sqlite")
-    {
-        if (!Is::nemstr($path) || !is_dir($path)) return [];
-        $dbns = [];
-        $confp = $path.DS."config";
-        $cfext = static::$confExt;
-        if (!is_dir($confp)) return [];
-        //输入的数据库类型
-        if (!Is::nemstr($dbtype)) $dbtype = "sqlite";
-        $dbtln = strlen($dbtype);
-        //查找路径下 可能存在的 配置文件
-        $ph = @opendir($confp);
-        while(false !== ($dbn = readdir($ph))) {
-            if (in_array($dbn, [".",".."]) || is_dir($confp.DS.$dbn) || strpos($dbn, $cfext)===false) continue;
-            //确定数据库配置文件中指定的 数据库类型 与 传入的 数据库类型一致
-            $cf = $confp.DS.$dbn;
-            $cfa = file_get_contents($cf);
-            $cfa = Conv::j2a($cfa);
-            $dsn = $cfa["dsn"] ?? null;
-            if (!Is::nemstr($dsn) || substr($dsn, 0, $dbtln)!=$dbtype) continue;
-            //保存到 dbns
-            $dbn = str_replace($cfext,"",$dbn);
-            if (!in_array($dbn, $dbns)) $dbns[] = $dbn;
-        }
-        @closedir($ph);
-        //返回找到的 数据库列表
-        return $dbns;
-    }
-
-
-
-
-    /**
      * 实例方法
      */
 
     /**
      * 获取库中所有表 数组
+     * !! 子类必须实现
      * @return Array [ 表名, ... ]
      */
     public function getTableNames()
+    {
+        //... 子类实现
+
+        return [];
+    }
+
+    /**
+     * 查看某个数据表的索引
+     * !! 子类必须实现
+     * @param String $tbn 表名
+     * @return Array 
+     */
+    public function getTableIndexs($tbn)
     {
         //... 子类实现
 

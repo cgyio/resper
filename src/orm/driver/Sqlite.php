@@ -11,11 +11,21 @@ use Cgy\orm\Db;
 use Cgy\orm\Driver;
 use Cgy\orm\Config;
 use Cgy\util\Is;
+use Cgy\util\Arr;
+use Cgy\util\Str;
 use Cgy\util\Path;
 use Medoo\Medoo;
 
 class Sqlite extends Driver 
 {
+    /**
+     * 通用的 sqlite 连接参数
+     */
+    protected static $dftMedooParams = [
+        "type" => "sqlite",
+        "database" => "",
+    ];
+
     //数据库文件后缀名
     public static $ext = ".db";
 
@@ -24,108 +34,49 @@ class Sqlite extends Driver
      */
     
     /**
-     * 根据 Orm 参数，解析获取数据库相关的必须参数
-     * @param Array $conf Orm 参数
-     * @return Array 数据库路径，文件地址等必要参数 [ path=>'', dbns=>[ 路径下所有可用数据库 名称数组 ], ... ]
-     */
-    public static function initOrmConf($conf = [])
-    {
-        $ormc = [
-            "path" => "",
-            "dbns" => []
-        ];
-
-        //解析数据库路径预设
-        $dirs = $conf["dirs"] ?? DIR_DB;
-        $dbp = static::parseDirs($dirs);
-        if (!empty($dbp)) {
-            $ormc["path"] = Path::fix($dbp);
-            //查询数据库列表
-            $dbns = static::findDbnsIn($ormc["path"], "sqlite");
-            $ormc["dbns"] = $dbns;
-        } else {
-            //指定的数据库文件路径不存在，报错
-            trigger_error("orm/fatal::指定的数据库路径不存在，DIRS = ".implode(", ",$dirs), E_USER_ERROR);
-        }
-
-        return $ormc;
-    }
-
-    /**
-     * 根据 Orm 参数，创建每个 Db 的 Medoo 连接参数
-     * @param Array $conf Orm 参数
-     * @return Array Medoo 连接参数 [ dbn => [ type=>"", database=>"", host=>"", ... ], ... ]
-     */
-    public static function initMedooParams($conf = [])
-    {
-        $dbp = $conf["path"];
-        $dns = $conf["dbns"];
-
-        //创建 Medoo 连接参数
-        $medoo = [];
-        foreach ($dns as $i => $dbn) {
-            $medoo[$dbn] = [
-                "type" => "sqlite",
-                "database" => $dbp.DS.$dbn.self::$ext
-            ];
-        }
-
-        return $medoo;
-    }
-
-    /**
-     * 创建某个数据库 key
-     * @param Array $opt Medoo 连接参数
-     * @return String DB_KEY 
-     */
-    public static function dbkey($opt = [])
-    {
-        $dbf = self::getDbPath($opt);
-        if (!Is::nemstr($dbf)) return null;
-        return "DB_".md5($dbf);
-    }
-    
-    /**
      * 数据库连接方法
-     * @param Array $opt medoo 连接参数
+     * @param Array $opt 数据库配置参数，在 Orm::$current->config->dbn 中，数据结构参考：orm/Config::$context 属性
      * @return Dbo 数据库实例
      */
     public static function connect($opt=[])
     {
-        //数据库文件
-        $dbf = self::getDbPath($opt);
-        //var_dump($dbf);
-        if (!Is::nemstr($dbf)) return null;
-        $pathinfo = pathinfo($dbf);
-        $dbname = $pathinfo["filename"];
-        $dbkey = self::dbkey($opt);
+        //获取参数
+        $conf = $opt["config"] ?? null;     //数据库配置文件实际路径
+        $dbkey = $opt["key"] ?? null;
+        $dbn = $opt["name"] ?? null;
+        $type = $opt["type"] ?? null;
+        $driver = $opt["driver"] ?? null;
+        $medoo = $opt["medoo"] ?? null;
+        //检查参数合法性
+        if (
+            !Is::nemstr($conf) || !file_exists($conf) ||
+            !Is::nemstr($dbkey) || !Is::nemstr($dbn) ||
+            !Is::nemstr($type) || $type!=="sqlite" ||
+            /*!Is::nemstr($driver) || $driver !== static::class ||*/
+            !Is::nemarr($medoo) || !isset($medoo["database"]) || !Is::nemstr($medoo["database"])
+        ) {
+            return null;
+        }
         //检查是否存在缓存的数据库实例
         if (isset(Orm::$DB[$dbkey]) && Orm::$DB[$dbkey] instanceof Db) {
             return Orm::$DB[$dbkey];
         }
+
+        //用默认值 填充连接参数
+        $medoo = Arr::extend(static::$dftMedooParams, $medoo);
+        //处理数据库文件后缀名
+        $medoo["database"] = static::autoSuffix($medoo["database"]);
+
         //创建数据库实例
-        $driver = static::class;
-        $db = new $driver([
-            "type" => "sqlite",
-            "database" => $dbf
-        ]);
+        $db = new $driver($medoo);
         //写入参数
-        $db->type = "sqlite";
-        $db->name = $dbname;
+        $db->type = $type;
+        $db->name = $dbn;
         $db->key = $dbkey;
-        $db->pathinfo = $pathinfo;
+        //sqlite 类型 数据库路径信息应为：  pathinfo( $medoo["database"] )
+        $db->pathinfo = pathinfo($medoo["database"]);
         $db->driver = $driver;
-        //缓存
-        Orm::$DB[$dbkey] = $db;
-        //解析数据库参数文件
-        $db->config = new Config([
-            "type" => "sqlite",
-            "database" => $dbf,
-            "dbkey" => $dbkey,
-            //设置文件保存在 db_path/config/db_name.json
-            "conf" => $pathinfo["dirname"].DS."config".DS.$dbname.self::$confExt
-        ]);
-        
+        //返回创建的数据库实例
         return $db;
     }
 
@@ -330,12 +281,26 @@ class Sqlite extends Driver
      * tools
      */
 
-    //根据 连接参数中 获取 数据库文件路径
-    public static function getDbPath($opt=[])
+    /**
+     * 自动补全 sqlite 数据库文件后缀名
+     * 如果定义了 DB_EXT 则使用常量 作为后缀名，
+     * 如果未定义常量，则使用 static::$ext 作为后缀名
+     * @param String $dbf 数据库文件路径
+     * @return String|null
+     */
+    public static function autoSuffix($dbf)
     {
-        $database = $opt["database"] ?? null;
-        if (!Is::nemstr($database) || !file_exists($database)) return null;
-        return Path::fix($database);
+        if (!Is::nemstr($dbf)) return null;
+        //确认 数据库文件后缀名
+        $ext = defined("DB_EXT") ? DB_EXT : static::$ext;
+        //数据库文件路径信息
+        $pi = pathinfo($dbf);
+        $cext = $pi["extension"] ?? "";
+        if (".".strtolower($cext) !== $ext) {
+            //如果给出的 dbf 中不包含后缀名，则添加后缀名
+            $dbf .= $ext;
+        }
+        return $dbf;
     }
 
 }

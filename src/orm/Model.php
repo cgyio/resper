@@ -110,26 +110,29 @@ class Model extends Record
      */
     public static function parseConfig()
     {
-        $cls = static::$cls;
-        $cla = explode("\\", $cls);
-        $cln = array_pop($cla);
+        //模型类全称
+        $cls = static::class;
+        //数据模型名称 首字母大写
+        $mdn = static::mdn();
+        //转为 数据表名称 
+        $tbn = static::tbn();
         
         //从 Db 获取 config 内容
         $db = static::$db;
-        $conf = $db->config->ctx("model/".lcfirst($cln));
-        if (!empty($conf)) {
-            $mdn = lcfirst($cln);
-        } else {
-            $conf = $db->config->ctx("model/".$cln);
-            if (!empty($conf)) {
-                $mdn = $cln;
-            } else {
-                return $cls;
-            }
+        $conf = $db->config->ctx("model/$tbn");
+        //未获取到 model 预设参数，直接返回
+        if (empty($conf)) return $cls;
+        //静态检查 数据模型 $cls 是否已有缓存的 config 实例
+        $cfger = Config::hasConfig($cls);
+        if ($cfger===false) {
+            //没有缓存的 config 实例
+            //使用 model\Config 解析表预设
+            $cfger = new Config($cls, $conf, $mdn);
         }
+        //关联 config 实例到此类
+        static::$config = $cfger;
 
-        //使用 model\Config 解析表预设
-        static::$config = new Config($cls, $conf, $mdn);
+        //返回 类全称
         return $cls;
     }
 
@@ -141,6 +144,16 @@ class Model extends Record
     {
         $clsn = static::class;
         return basename(str_replace("\\","/",$clsn));
+    }
+
+    /**
+     * 获取当前数据模型 对应的数据表名，全小写，下划线_连接
+     * @return String 数据表名
+     */
+    public static function tbn()
+    {
+        $mdn = static::mdn();
+        return Orm::snake($mdn);
     }
 
     /**
@@ -272,6 +285,12 @@ class Model extends Record
     {
         //未传入数据，则从 input 中读取
         $data = empty($data) ? Request::$current->inputs->json : $data;
+
+        if (!$data instanceof Record) {
+            if (!Is::nemarr($data)) $data = [];
+            $data = static::new($data);
+            return $data;
+        }
         
         if ($data instanceof Record) {
             if ($data->isNew!==true) {
@@ -417,126 +436,85 @@ class Model extends Record
 
 
     /**
-     * Apis
-     */
-
-    /**
-     * 执行任意 api 操作
-     * @param String $api 方法名，不含末尾 "Api"
-     * @param Array $args URI 参数
-     * @return Mixed
-     */
-    public static function execApis($api, ...$args)
-    {
-        $apic = static::hasApi($api);
-        $isModel = $apic["isModel"];
-        $apin = $apic["name"];
-        $fn = $apin."Api";
-
-        //执行 数据模型(表) api 静态方法
-        if ($isModel) {
-            return static::$fn(...$args);
-        }
-
-        //执行 数据记录实例 api 实例方法
-        $db = static::$db;
-        $mdn = static::$config->name;
-        //执行 curd->query() 使用 input 传入的参数 创建 ModelSet 实例
-        $rs = $db->$mdn->query();
-        if (!$rs instanceof ModelSet) return null;
-        //查询并创建 ModelSet 记录集实例后，调用 实例 api 方法
-        return $rs->$fn(...$args);
-    }
-
-    /**
-     * 判断是否存在 api
-     * @param String $api 方法名，不包含结尾的 "Api"
-     * @return Mixed 存在则返回 $model::$config->api[$api] 参数内容，不存在则返回 false
-     */
-    public static function hasApi($api)
-    {
-        $conf = static::$config->api;
-        if (isset($conf[$api])) return $conf[$api];
-        $lapi = lcfirst($api);
-        if (isset($conf[$lapi])) return $conf[$lapi];
-        return false;
-    }
-
-    /**
+     * Proxy 代理响应方法
+     * 通过 url 访问 数据模型的方法，将被发送到这些方法中
+     * 例如：
+     * https://[host]/[resper]/db/[dbn]/[tbn]/foo_bar  -->  static::fooBarProxy
+     * https://[host]/[resper]/db/[dbn]/[tbn]/api/foo_bar  -->  static::fooBarApi 或记录实例方法 $record->fooBarApi
      * 
+     * 数据模型固有的 操作方法：在 uac/Operation::$dftModelOprs 中定义
+     *      C   create      --> createProxy
+     *      U   update      --> updateProxy
+     *      R   retrieve    --> retrieveProxy
+     *      D   delete      --> deleteProxy
+     *          toggle      --> toggleProxy
+     * 
+     * 操作权限验证 在对应的 OrmProxyer 类中执行，此处仅定义操作逻辑
      */
 
     /**
-     * api
-     * @role all
-     * @desc 新建数据记录(C)
-     * @param Array $args 更多 URI 参数
-     * @return Model 实例
+     * proxy 代理响应方法
+     * @name create
+     * @title 新建记录
+     * 
+     * @param Array $args URI 参数序列
+     * @return Record 新增的记录实例
      */
-    public static function createApi(...$args)
+    public static function createProxy(...$args)
     {
-        $pd = Request::input("json");
-        $data = $pd["data"] ?? [];
-        $rs = static::new($data);
-        return $rs->context;
+
     }
 
     /**
-     * api
-     * @role all
-     * @desc 编辑数据记录(U)
-     * @param Array $args 更多 URI 参数
-     * @return Model 实例
+     * proxy 代理响应方法
+     * @name update
+     * @title 修改记录
+     * 
+     * @param Array $args URI 参数序列
+     * @return Record 修改后的记录实例
      */
-    public static function updateApi(...$args)
-    {
-        
-    }
-    
-    /**
-     * api
-     * @role all
-     * @desc 查询数据记录(R)
-     * @param Array $args 更多 URI 参数
-     * @return Model 实例
-     */
-    public static function retrieveApi(...$args)
-    {
-        $post = array_pop($args);
-        var_dump($post);
-        exit;
-        if (empty($post)) return [];
-        $query = $post["query"] ?? [];
-        
-    }
-    
-    /**
-     * api
-     * @role all
-     * @desc 删除数据记录(D)
-     * @param Array $args 更多 URI 参数
-     * @return Model 实例
-     */
-    public static function deleteApi(...$args)
+    public static function updateProxy(...$args)
     {
         
     }
 
     /**
-     * api
-     * @role all
-     * @desc 获取数据表中全部记录
-     * @param Array $args 
-     * @return Array 记录集
+     * proxy 代理响应方法
+     * @name retrieve
+     * @title 查询记录
+     * 
+     * @param Array $args URI 参数序列
+     * @return ModelSet 符合条件的数据记录集
      */
-    public static function allApi(...$args)
+    public static function retrieveProxy(...$args)
     {
-        $db = static::$db;
-        $conf = static::$config;
-        $mdn = $conf->name;
-        $tbn = $conf->table;
-        $rst = $db->medoo("select", $tbn);
+        
+    }
 
+    /**
+     * proxy 代理响应方法
+     * @name delete
+     * @title 删除记录
+     * 
+     * @param Array $args URI 参数序列
+     * @return Int 删除的记录行数
+     */
+    public static function deleteProxy(...$args)
+    {
+        
+    }
+
+    /**
+     * proxy 代理响应方法
+     * @name toggle
+     * @title 切换记录生效/失效
+     * 
+     * @param Array $args URI 参数序列
+     * @return Record|ModelSet 编辑后的记录(集)实例
+     */
+    public static function toggleProxy(...$args)
+    {
+        var_dump("toggle enable data");
     }
 
 
@@ -544,101 +522,6 @@ class Model extends Record
     /**
      * 通用方法
      */
-
-    /**
-     * 根据 orm 参数中的 models 项，解析得到当前数据库 model 文件路径
-     * @param Array $conf 参数数组，包含 models 项内容
-     * @return Array 解析得到的 model 模型文件路径参数 [path=>'模型类文件路径', clsp=>'模型类全称前缀', ...]
-     */
-    public static function initOrmConf($conf = [])
-    {
-        $ormc = [
-            "path" => "",
-            "clsp" => ""
-        ];
-
-        $models = $conf["models"] ?? DIR_MODEL;
-        $mdps = Is::nemstr($models) ? explode(",", trim($models, ",")) : $models;
-        if (!Is::nemarr($mdps) || !Is::indexed($mdps)) $mdps = explode(",", DIR_MODEL);
-        $mdp = Path::exists($mdps, [
-            "checkDir" => true,
-            "all" => false
-        ]);
-        //var_dump($mdp);
-        if (empty($mdp)) $mdp = Path::find("root/model", ["checkDir"=>true]);
-        if (!empty($mdp)) {
-            $ormc["path"] = Path::fix($mdp);
-            //获取类全称前缀
-            $ns = defined("NS") ? NS : "\\Cgy\\";
-            $root = defined("ROOT_PATH") ? ROOT_PATH.DS : DS."data".DS;
-            $clsp = $ns . str_replace($root, "", $mdp);
-            $clsp = str_replace(DS,"\\", $clsp);
-            $ormc["clsp"] = $clsp;
-
-        } else {
-            //指定的数据库文件路径不存在，报错
-            trigger_error("orm/fatal::指定的数据模型路径不存在，DIRS = ".implode(", ",$mdps), E_USER_ERROR);
-        }
-
-        return $ormc;
-    }
-
-
-
-    /**
-     * 获取 数据表(模型) 类全称
-     * @param String $model 表名，不指定 则 返回当前 Model
-     * @return Class 类全称 or null
-     */
-    public static function __cls($model="")
-    {
-        //当前 类全称
-        $cls = static::class;
-        if (substr($cls, 0,1)!="\\") $cls = "\\".$cls;
-        if (!is_notempty_str($model)) {
-            //不指定 model 返回当前 数据表(模型) 类全称
-            return $cls;
-        } else {
-            //指定了 model
-            if (strpos($model, "/")!==false) {
-                $ma = explode("/", $model);
-                if (count($ma)==2) {
-                    //model == dbn/tbn 访问当前 DbApp 下的 其他数据表 类
-                    $dbn = $ma[0];
-                    $tbn = $ma[1];
-                    $ncls = static::$db->db($dbn)->model(ucfirst($tbn));
-                } else if (count($ma)==3) {
-                    //model == appname/dbn/tbn  访问其他 DbApp 下的 数据表 类
-                    $apn = $ma[0];
-                    $dbn = $ma[1];
-                    $tbn = $ma[2];
-                    $appcls = cls("app/".ucfirst($apn));
-                    if (class_exists($appcls)) {
-                        $app = new $appcls();
-                        $dbk = $dbn."Db";
-                        $dbo = $app->$dbk;
-                        if ($dbo instanceof Db) {
-                            $ncls = $dbo->model(ucfirst($tbn));
-                        } else {
-                            return null;
-                        }
-                    } else {
-                        return null;
-                    }
-                } else {
-                    return null;
-                }
-            } else {
-                //model == tbn
-                $cla = explode("\\", $cls);
-                array_pop($cla);
-                $cla[] = ucfirst($model);
-                $ncls = implode("\\", $cla);
-            }
-            if (class_exists($ncls)) return $ncls;
-            return null;
-        }
-    }
 
 
 

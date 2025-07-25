@@ -180,7 +180,7 @@ class Exporter
         if (empty($key) || $key=="" || $key=="_") {
             $ctx = $this->rs->context;
             foreach ($gfds as $getter) {
-                $gk = Str::snake($getter, "_");
+                $gk = Orm::snake($getter);
                 $ctx[$gk] = $this->export($getter);
             }
             return $ctx;
@@ -196,18 +196,15 @@ class Exporter
         /**
          * $key == column name
          * $rs->ctx("column") == $rs->context["column"]
-         * $rs->ctx("getterFunc") == $rs->getterFunc == $rs->getterFunc()
+         * $rs->ctx("FooBar") == $rs->context["foo_bar"]
+         * $rs->ctx("foo_bar") == $rs->context["foo_bar"]
+         * $rs->ctx("FooBar") == $rs->fooBarGetter()
+         * $rs->ctx("foo_bar") == $rs->fooBarGetter()
          * 返回主表 字段值
          */
-        if (isset($this->rs->context[$key])) return $this->rs->context[$key];
-        if (in_array($key, $gfds)) {
-            return $this->rs->$key();
-            //手动定义的 getter 计算字段
-            //$m = $key."Getter";
-            //if (method_exists($this->rs, $m)) return $this->rs->$key();
-            //根据字段类型 自动定义的 getter 计算字段
-            //return $this->autoGetter($key);
-        }
+        $fdn = Orm::snake($key);
+        if (isset($this->rs->context[$fdn])) return $this->rs->context[$fdn];
+        if (in_array($fdn, $gfds)) return $this->rs->$fdn();
 
         /**
          * 返回关联表 实例 或 关联表数据
@@ -218,31 +215,32 @@ class Exporter
          * 返回关联表 实例
          */
         if (strlen($key)>2 && substr($key, -2)=="Rs") {
-            $jtbn = ucfirst(substr($key, 0, -2));
+            $jtbn = substr($key, 0, -2);
+            //转为 数据表名 全小写 下划线
+            $jtbn = Orm::snake($jtbn);
             if (isset($jtbs[$jtbn])) return $jtbs[$jtbn];
         }
 
         /**
-         * $key == Psku | psku_foo | psku_foo_bar_...
-         * $rs->ctx("Psku") == $rs->Psku == $rs->joined["Psku"]->exporter->export()
-         * $rs->ctx("psku_foo") == $rs->psku_foo == $rs->joined["Psku"]->context["foo"]
-         * $rs->ctx("psku_foo_bar") == $rs->psku_foo_bar == $rs->joined["Psku"]->exporter->export("foo_bar")
+         * $key == fooBar | FooBar | foo_bar | foo_bar_...
+         * $rs->ctx("fooBar") == $rs->fooBar == $rs->joined["foo_bar"]->exporter->export()
+         * $rs->ctx("foo_bar") == $rs->foo_bar == $rs->joined["foo_bar"]->exporter->export()
+         * $rs->ctx("fooBarJazTom...") == $rs->fooBarJazTom... == $rs->joined["foo_bar"]->exporter->export("jazTom...")
+         * $rs->ctx("foo_bar_jaz_...") == $rs->foo_bar_jaz_... == $rs->joined["foo_bar"]->exporter->export("jaz_...")
          * 返回关联表数据
          */
-        if (isset($jtbs[ucfirst($key)])) {
-            $jtbn = ucfirst($key);
-            $jtb = $jtbs[$jtbn];
-            return $jtb->exporter->export();
-        } else if (strpos($key, "_")!==false) {
-            $ka = explode("_", $key);
-            if (isset($jtbs[ucfirst($ka[0])])) {
-                $jtb = $jtbs[ucfirst(array_shift($ka))];
-                $suk = implode("_", $ka);
-                if ($suk=="") return $jtb->exporter->export();
-                $rst = $jtb->exporter->export($suk);
-                if (!is_null($rst)) return $rst;
-            }
+        //转为 关联数据表名 全小写，下划线
+        $jtbn = Orm::snake($key);
+        if (isset($jtbs[$jtbn]) && $jtbs[$jtbn] instanceof Model) return $jtbs[$jtbn]->exporter->export();
+        /**
+         * 遍历 jtbs 查找对应的 关联表名
+         */
+        foreach ($jtbs as $jtbi => $jtbo) {
+            if (substr($jtbn, 0, strlen($jtbi)+1)!==$jtbi."_") continue;
+            $suk = substr($jtbn, strlen($jtbi)+1);
+            return $jtbo->exporter->export($suk);
         }
+        
 
         return null;
     }
@@ -287,11 +285,11 @@ class Exporter
         //关联表
         $jtbs = $this->rs->joined;
         if (empty($jtbs)) return $rtn;
-        foreach ($jtbs as $tbk => $jrs) {
+        foreach ($jtbs as $tbn => $jrs) {
             $jctx = $jrs->context;
             //$jctx = $jrs->exporter->expAll();     //只 返回 一层 关联表，关联表的关联表不返回，因为可能会出现 循环引用的问题
             foreach ($jctx as $jf => $jv) {
-                $rtn[strtolower($tbk)."_".$jf] = $jv;
+                $rtn[$tbn."_".$jf] = $jv;
             }
         }
         return $rtn;

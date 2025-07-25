@@ -18,6 +18,8 @@ namespace Cgy;
 
 use Cgy\Resper;
 use Cgy\Event;
+use Cgy\orm\Config;
+use Cgy\orm\config\DbConfig;
 use Cgy\orm\Db;
 use Cgy\orm\Model;
 use Cgy\Request;
@@ -69,7 +71,7 @@ class Orm
     public $resper = null;
 
     //Orm 初始化参数
-    public $config = [];
+    public $config = null;
 
     /**
      * 记录 Orm 是否已经初始化
@@ -95,16 +97,20 @@ class Orm
 
         //Orm 参数
         $ormc = $conf["orm"] ?? [];
+        //未启用 Orm 返回 null
         if (empty($ormc) || (isset($ormc["enable"]) && $ormc["enable"]!==true)) return null;
-        $this->config = $ormc;
-
-        //数据库驱动类
-        $driver = $this->driver;
-        //创建 Medoo 连接参数
-        $this->config["medoo"] = $driver::initMedooParams($this->config);
+        //实例化 orm/Config 参数处理类
+        $this->config = new Config($ormc, $resper);
+        //检查经过处理的 orm 参数是否有效
+        $dbns = $this->config->dbns;
+        if (!Is::nemarr($dbns)) {
+            //没有可用的数据库，表示 Orm 应启用，但是实例化失败，严重错误，报错
+            trigger_error("orm/fatal::没有可用的数据库，请检查数据库预设参数", E_USER_ERROR);
+            return null;
+        }
         
         //如果定义了 required 参数
-        $reqs = $this->config["required"] ?? [];
+        $reqs = $this->config->required ?? [];
         if (Is::nemarr($reqs) && Is::indexed($reqs)) {
             //创建 所有 required Db 数据库实例
             for ($i=0;$i<count($reqs);$i++) {
@@ -127,29 +133,15 @@ class Orm
     public function __get($key)
     {
         $conf = $this->config;
+        $dbns = $conf->dbns;
 
         /**
-         * $this->driver 获取 db driver 类全称
+         * $this->FooBar
+         * $this->foo_bar
+         * 获取/创建 Db 数据库实例
          */
-        if ($key == "driver") {
-            $dbtp = $conf["type"];
-            return self::driver($dbtp);
-        }
-
-        /**
-         * $this->Dbn 获取/创建 Db 数据库实例
-         */
-        $dbns = $conf["dbns"] ?? [];
-        if (in_array($key, $dbns)) return $this->db($key);
-        if (Str::beginUp($key)) {
-            //取消首字母大写
-            $lkey = lcfirst($key);
-            if (in_array($lkey, $dbns)) return $this->db($lkey);
-        }
-
-        /**
-         * 
-         */
+        $dbn = $this->hasDb($key);
+        if ($dbn!==false) return $this->db($dbn);
 
 
         return null;
@@ -162,19 +154,34 @@ class Orm
      */
     public function db($dbn)
     {
-        $conf = $this->config;
-        $medoo = $conf["medoo"] ?? [];
-        if (empty($medoo) || !isset($medoo[$dbn])) return null;
-        $opt = $medoo[$dbn];
-        $driver = $this->driver;
-        $dbkey = $driver::dbkey($opt);
+        //确保数据库存在，存在则取得正确格式的 数据库名
+        $dbn = $this->hasDb($dbn);
+        if ($dbn===false) return null;
+        //读取数据库参数
+        $conf = $this->config->$dbn;
+        if (!Is::nemarr($conf)) return null;
+        $driver = $conf["driver"] ?? null;
+        $dbkey = $conf["key"] ?? null;
+        //确保参数合法
+        if (!Is::nemstr($driver) || !class_exists($driver) || !Is::nemstr($dbkey)) return null;
+        //检查数据库实例的缓存
         if (isset(self::$DB[$dbkey])) return self::$DB[$dbkey];
-        $db = $driver::connect($opt);
+        //读取 Medoo 连接参数，确保合法
+        $medoo = $conf["medoo"] ?? null;
+        if (!Is::nemarr($medoo) || !isset($medoo["type"]) || !isset($medoo["database"])) return null;
+
+        //调用对应的数据库驱动，连接数据库，返回数据库实例
+        $db = $driver::connect($conf);
         //依赖注入
         $db->dependency([
             "resper" => $this->resper,
             "orm" => $this
         ]);
+        //缓存
+        Orm::$DB[$dbkey] = $db;
+        //解析数据库参数文件
+        $db->config = new DbConfig($conf);
+        //返回创建的数据库实例
         return $db;
     }
 
@@ -185,10 +192,11 @@ class Orm
      */
     public function hasDb($dbn)
     {
-        $dbns = $this->config["dbns"] ?? [];
+        //转为 数据库名 格式
+        $dbn = Orm::snake($dbn);
+        //在 dbns 中查找
+        $dbns = $this->config->dbns ?? [];
         if (in_array($dbn, $dbns)) return $dbn;
-        $ldbn = lcfirst($dbn);
-        if (in_array($ldbn, $dbns)) return $ldbn;
         return false;
     }
 
@@ -199,16 +207,19 @@ class Orm
      */
     public function hasModel($mdn)
     {
+        //转为 数据表名 格式
+        $mdn = Orm::snake($mdn);
+        //在 所有数据库中 查找
         $conf = $this->config;
-        $dbns = $conf["dbns"] ?? [];
-        $mdcf = $conf["model"] ?? [];
-        $clsp = $mdcf["clsp"] ?? null;
-        if (!Is::nemarr($dbns) || !Is::indexed($dbns) || !Is::nemstr($clsp)) return false;
+        $dbns = $conf->dbns ?? [];
         foreach ($dbns as $dbn) {
-            $mcls = $clsp."\\".strtolower($dbn)."\\".ucfirst($mdn);
-            if (class_exists($mcls)) {
+            $dbc = $conf->$dbn;
+            if (!Is::nemarr($dbc) || !isset($dbc["models"]) || !Is::nemarr($dbc["models"])) continue;
+            $mds = $dbc["models"];
+            $mdc = $dbc["model"] ?? [];
+            if (in_array($mdn, $mds) && isset($mdc[$mdn])) {
                 return [
-                    "mcls" => $mcls,
+                    "mcls" => $mdc[$mdn],
                     "dbn" => $dbn
                 ];
             }
@@ -268,16 +279,41 @@ class Orm
      */
 
     /**
-     * 判断 指定的 resper 类路径下，是否存在 数据库/数据表
-     * 通过在
+     * 数据库名|数据表名|字段名 转为 类名|方法名：首字母大写，驼峰
+     * foo --> Foo
+     * foo_bar --> FooBar
+     * fooBar_jazTom --> FooBarJazTom
+     * @param String $name 数据库|数据表|字段 名称 全小写，下划线连接
+     * @param Bool $ucfirst 首字母是否大写，默认 true
+     * @return String
      */
+    public static function camel($name, $ucfirst=true)
+    {
+        if (!Is::nemstr($name)) return $name;
+        $n = Str::snake($name, "_");
+        return Str::camel($n, $ucfirst);
+    }
+
+    /**
+     * 类名|方法名 转为 数据库|数据表|字段名：全小写，下划线_连接
+     * fooBar --> foo_bar
+     * FooBar --> foo_bar
+     * fooBar_jazTom --> foo_bar_jaz_tom
+     * @param String $name 类名|方法名：首字母大写，驼峰
+     * @param String $glup 连接字符，默认 _
+     * @return String
+     */
+    public static function snake($name, $glup="_")
+    {
+        return Str::snake($name, $glup);
+    }
 
     /**
      * 获取 Db Driver
      * @param String $type 数据库类型
      * @return String driver 类全称
      */
-    public static function driver($type)
+    public static function __driver($type)
     {
         return Cls::find("orm/driver/".ucfirst(strtolower($type)));
     }
@@ -289,7 +325,7 @@ class Orm
      * @param Array $opt Orm 服务初始化参数
      * @return Orm
      */
-    public static function Init($callby, $opt=[])
+    /*public static function __Init($callby, $opt=[])
     {
         if (self::$inited==false) {
             $reqs = self::$initRequiredDbs;
@@ -313,7 +349,7 @@ class Orm
 
         self::$inited = true;
         return self::class;
-    }
+    }*/
 
     /**
      * __callStatic
@@ -363,7 +399,7 @@ class Orm
                 /**
                  * Orm::DbnTbn()    返回 Db 实例，同时将 Db->currentModel 指向 Tbn
                  */
-                if (Str::beginUp($key)) {
+                /*if (Str::beginUp($key)) {
                     $ks = Str::snake($key, "-");
                     $ks = str_replace("-", " ", $ks);
                     $ks = ucwords($ks);
@@ -374,13 +410,18 @@ class Orm
                             return Orm::$dbn(...$ka);
                         }
                     }
-                }
+                }*/
     
             }
         }
 
         return null;
     }
+
+
+
+
+
 
     /**
      * 获取 app 路径下所有 可用的 DbApp name

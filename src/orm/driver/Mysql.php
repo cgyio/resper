@@ -9,7 +9,6 @@ namespace Cgy\orm\driver;
 use Cgy\Orm;
 use Cgy\orm\Db;
 use Cgy\orm\Driver;
-use Cgy\orm\Config;
 use Cgy\util\Is;
 use Cgy\util\Arr;
 use Cgy\util\Path;
@@ -17,6 +16,21 @@ use Medoo\Medoo;
 
 class Mysql extends Driver 
 {
+    /**
+     * 通用的 mysql 连接参数
+     */
+    protected static $dftMedooParams = [
+        "type" => "mysql",
+        "host" => "127.0.0.1",
+        "port" => 3306,
+        "database" => "",
+        "username" => "",
+        "password" => "",
+
+        "charset" => "utf8mb4",
+        "collation" => "utf8mb4_general_ci",    //排序方式
+    ];
+
     /**
      * 缓存当前连接到的 MySql 服务器参数
      */
@@ -34,137 +48,69 @@ class Mysql extends Driver
      */
     
     /**
-     * 根据 Orm 参数，解析获取数据库相关的必须参数
-     * @param Array $conf Orm 参数
-     * @return Array 数据库路径，文件地址等必要参数 [ path=>'', dbns=>[ 路径下所有可用数据库 名称数组 ], ... ]
-     */
-    public static function initOrmConf($conf = [])
-    {
-        $ormc = [
-            "path" => "",
-            "dbns" => [],
-            "mysql" => [
-                "host" => "127.0.0.1",
-                "port" => 3306,
-                "username" => "",
-                "password" => "",
-            ]
-        ];
-
-        //解析数据库路径预设
-        $dirs = $conf["dirs"] ?? DIR_DB;
-        $dbp = static::parseDirs($dirs);
-        if (empty($dbp))  {
-            //指定的数据库配置文件路径不存在，报错
-            trigger_error("orm/fatal::指定的数据库路径不存在，DIRS = ".implode(", ",$dirs), E_USER_ERROR);
-        }
-        $ormc["path"] = Path::fix($dbp);
-        //查询数据库列表
-        $dbns = static::findDbnsIn($ormc["path"], "mysql");
-        $ormc["dbns"] = $dbns;
-
-        //获取 mysql 参数
-        $mysql = $conf["mysql"] ?? [];
-        $usr = $mysql["username"] ?? null;
-        $pwd = $mysql["password"] ?? null;
-        if(!Is::nemarr($mysql) || !Is::nemstr($usr)||!Is::nemstr($pwd)) {
-            //缺少 mysql 参数，报错
-            trigger_error("orm/fatal::未指定数据库连接参数", E_USER_ERROR);
-        }
-        $ormc["mysql"] = Arr::extend($ormc["mysql"], $mysql);
-        if (isset($mysql["database"])) {
-            unset($ormc["mysql"]["database"]);
-        }
-
-        return $ormc;
-    }
-
-    /**
-     * 根据 Orm 参数，创建每个 Db 的 Medoo 连接参数
-     * @param Array $conf Orm 参数
-     * @return Array Medoo 连接参数 [ dbn => [ type=>"", database=>"", host=>"", ... ], ... ]
-     */
-    public static function initMedooParams($conf = [])
-    {
-        $dbp = $conf["path"];
-        $dns = $conf["dbns"];
-        $mysql = $conf["mysql"];
-
-        //创建 Medoo 连接参数
-        $medoo = [];
-        foreach ($dns as $i => $dbn) {
-            $medoo[$dbn] = Arr::extend($mysql, [
-                "type" => "mysql",
-                "database" => $dbn,
-                //缓存 path 参数到 medoo 连接参数中
-                "_path" => $dbp,
-            ]);
-        }
-
-        return $medoo;
-    }
-
-    /**
-     * 创建某个数据库 key
-     * @param Array $opt Medoo 连接参数
-     * @return String DB_KEY 
-     */
-    public static function dbkey($opt = [])
-    {
-        $dbf = self::getDbPath($opt);
-        if (!Is::nemstr($dbf)) return null;
-        return "DB_".md5($dbf);
-    }
-    
-    /**
      * 数据库连接方法
-     * @param Array $opt medoo 连接参数
+     * @param Array $opt 数据库配置参数，在 Orm::$current->config->dbn 中，数据结构参考：orm/Config::$context 属性
      * @return Dbo 数据库实例
      */
     public static function connect($opt=[])
     {
-        //db-key
-        $dbkey = static::dbkey($opt);
-        if (!Is::nemstr($dbkey)) return null;
+        //获取参数
+        $conf = $opt["config"] ?? null;     //数据库配置文件实际路径
+        $dbkey = $opt["key"] ?? null;
+        $dbn = $opt["name"] ?? null;
+        $type = $opt["type"] ?? null;
+        $driver = $opt["driver"] ?? null;
+        $medoo = $opt["medoo"] ?? null;
+        //检查参数合法性
+        if (
+            !Is::nemstr($conf) || !file_exists($conf) ||
+            !Is::nemstr($dbkey) || !Is::nemstr($dbn) ||
+            !Is::nemstr($type) || $type!=="mysql" ||
+            /*!Is::nemstr($driver) || $driver !== static::class ||*/
+            !Is::nemarr($medoo) || !isset($medoo["database"]) || !Is::nemstr($medoo["database"])
+        ) {
+            return null;
+        }
         //检查是否存在缓存的数据库实例
         if (isset(Orm::$DB[$dbkey]) && Orm::$DB[$dbkey] instanceof Db) {
             return Orm::$DB[$dbkey];
         }
 
+        //用默认值 填充连接参数
+        $medoo = Arr::extend(static::$dftMedooParams, $medoo);
+
         /**
          * 确认要连接的数据库存在（不存在将自动创建）
          * 尝试连接一个 MySqlServer 中不存在的数据库将报错
          */
-        $exi = self::ensureDbExists($opt);
+        $exi = self::ensureDbExists($medoo);
         if ($exi!==true) {
             //数据库创建失败，报错
-            trigger_error("orm/fatal::无法连接数据库 [".$opt["database"]."]，数据库不存在", E_USER_ERROR);
+            trigger_error("orm/fatal::无法连接数据库 [".$medoo["database"]."]，数据库不存在", E_USER_ERROR);
         }
 
         //创建数据库实例
-        $driver = static::class;
-        $db = new $driver($opt);
+        $db = new $driver($medoo);
         //写入参数
-        $dbp = $opt["_path"];
-        $dbn = $opt["database"];
-        $db->type = "mysql";
+        $db->type = $type;
         $db->name = $dbn;
         $db->key = $dbkey;
-        $db->pathinfo = pathinfo($dbp);
+
+        /**
+         * mysql 类型 数据库路径信息
+         * 根据 配置文件路径，应在其上一级目录，例如：
+         * 配置文件：       app/foo/library/db/config/dbn.json 
+         * 则路径信息应为：  pathinfo( app/foo/library/db/dbn.mysql )
+         */
+        $dbfarr = explode(DS, $conf);
+        $dbfarr = array_slice($dbfarr, 0, -2);
+        $dbfarr[] = $dbn.".mysql";
+        $db->pathinfo = pathinfo(implode(DS, $dbfarr));
+
         $db->driver = $driver;
-        //缓存 MySql Server 连接参数
-        $db->cacheMySqlServer($opt);
-        //缓存
-        Orm::$DB[$dbkey] = $db;
-        //解析数据库参数文件
-        $db->config = new Config([
-            "type" => "mysql",
-            //"database" => $dbf,
-            "dbkey" => $dbkey,
-            //设置文件保存在 db_path/config/db_name.json
-            "conf" => $dbp.DS."config".DS.$dbn.self::$confExt
-        ]);
-        
+        //在 Db 数据库实例中 缓存 MySql Server 连接参数
+        $db->cacheMySqlServer($medoo);
+        //返回创建的数据库实例
         return $db;
     }
 
@@ -313,17 +259,6 @@ class Mysql extends Driver
      * static tools
      */
 
-    //根据 某个数据库的 medoo 连接参数中 获取 数据库配置文件路径
-    public static function getDbPath($opt=[])
-    {
-        $database = $opt["database"] ?? null;
-        $path = $opt["_path"] ?? null;
-        if (!Is::nemstr($database) || !Is::nemstr($path)) return null;
-        $cf = $path.DS."config".DS.$database.static::$confExt;
-        if (!file_exists($cf)) return null;
-        return Path::fix($cf);
-    }
-
     /**
      * 根据 Medoo 连接参数判断是否存在数据库
      * 如果不存在则创建
@@ -405,6 +340,7 @@ class Mysql extends Driver
 
     /**
      * 获取库中所有表 数组
+     * !! 覆盖父类
      * @return Array [ 表名, ... ]
      */
     public function getTableNames()
@@ -431,6 +367,7 @@ class Mysql extends Driver
 
     /**
      * 查看某个数据表的索引
+     * !! 覆盖父类
      * @param String $tbn 表名
      * @return Array 
      */
@@ -463,14 +400,30 @@ class Mysql extends Driver
      */
     public function cacheMySqlServer($opt=[])
     {
-        $ks = ["host","port","username","password"];
         if (!Is::nemarr($opt)) return false;
-        foreach ($ks as $ki) {
-            if (isset($opt[$ki])) {
-                $this->mysqlServer[$ki] = $opt[$ki];
-            }
+        foreach ($opt as $k => $v) {
+            if (in_array($k, ["database"])) continue; 
+            $this->mysqlServer[$k] = $v;
         }
         return true;
+    }
+
+    /**
+     * 获取已缓存的 MySql Server 连接参数
+     * @return Array
+     */
+    public function getMySqlServerParams()
+    {
+        $mss = $this->mysqlServer;
+        $rtn = [];
+        foreach ($mss as $k => $v) {
+            if ($k=="password") {
+                $rtn[$k] = "****";
+            } else {
+                $rtn[$k] = $v;
+            }
+        }
+        return $rtn;
     }
 
     /**

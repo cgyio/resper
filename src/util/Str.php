@@ -158,17 +158,19 @@ class Str extends Util
         if (!Is::nemstr($str)) return $str;
         //可以用作分隔符的字符：- _ / , \ 空格
         $str = preg_replace("/\_|\/|\,|\\|\s*/","-",$str);
-        $str = strtolower($str);
         if (strpos($str,"-")===false) {
-            return $ucfirst ? ucfirst($str) : $str;
+            $bgu = Str::beginUp($str);
+            if ($bgu && !$ucfirst) return lcfirst($str);
+            if (!$bgu && $ucfirst) return ucfirst($str);
+            return $str;
         } else {
-            $arr = explode("-",$str);
-            $fs = strtolower(array_shift($arr));
-            if ($ucfirst) $fs = ucfirst($fs);
-            $arr = array_map(function($item){
-                return ucfirst(strtolower($item));
-            }, $arr);
-            return $fs.implode("",$arr);
+            //带有分隔符的，必须全小写
+            $str = strtolower($str);
+            $str = str_replace("-"," ",$str);
+            $str = ucwords($str);
+            $str = str_replace(" ","",$str);
+            if (!$ucfirst) $str = lcfirst($str);
+            return $str;
         }
     }
 

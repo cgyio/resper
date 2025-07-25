@@ -24,6 +24,7 @@ use Cgy\orm\model\ModelSet;
 use Cgy\util\Is;
 use Cgy\util\Arr;
 use Cgy\util\Conv;
+use Cgy\util\Num;
 
 trait SpecialColAutoGetter 
 {

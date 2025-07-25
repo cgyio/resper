@@ -1,0 +1,96 @@
+{
+    "path": "此数据库配置文件所在目录的绝对路径：app/foo/library/db/config/[%{DBN}% | 实际配置文件名]",
+    "type": "数据库的类型：mysql",
+    "sqlite": {
+        "__desc": "如果数据库类型为sqlite，则在此指定必要的 Medoo 参数",
+        "database": "如果类型为sqlite，则在此指定数据库文件的绝对路径：app/foo/library/db/[%{DBN}% | 实际数据库文件名]"
+    },
+    "mysql": {
+        "__desc": "如果数据库类型为mysql，则在此指定必要的 Medoo 参数",
+        "host": "127.0.0.1",
+        "port": 3306,
+        "database": "%{DBN}% | 实际连接到的数据库名",
+        "username": "root",
+        "password": "foobar",
+
+        "__extra": "更多mysql数据库连接的 可选参数，可参考Medoo库的连接参数",
+        "charset": "字符集：utf8mb4",
+        "collation": "排序方式：utf8mb4_general_ci",
+        "__more": "..."
+    },
+
+    "modelPath": "指定数据模型类所在目录的绝对路径：app/foo/model/[%{DBN}% | 模型类所在目录名称]",
+    "modelRequired": [
+        "定义必须加载的数据模型，即 在数据库初始化时，此处的数据模型将自动初始化",
+        "table_1", "table_2", "..."
+    ],
+    
+    "name": "数据库名称(全小写，下划线_连接)，可与实际数据库名称（sqlite数据库文件名|mysql数据库名称）不相同：db_foo",
+    "title": "数据库中文名称：***数据库",
+    "desc": "数据库的用途说明",
+
+    "model": {
+
+        "mdn": {
+            "name": "模型(表)名称，与键名一致：mdn",
+            "title": "模型(表)标题，中文",
+            "desc": "模型(表)用途说明",
+            "path": "可以为某个数据模型单独指定模型类文件路径，不指定则使用 modelPath 路径，数据库名可用 %{DBN}% 代替",
+            "prepare": {
+                "__desc": "指定预处理参数",
+                "extends": "resper/orm/model/common/Usr",
+                "columns": []
+            },
+            "columns": {
+                "openid":   ["OPENID","员工微信公众号Openid",10],
+                "avatar":   ["头像","员工头像，一般来自微信",3],
+                "mobile":   ["手机号","员工手机号，在系统中唯一",5],
+                "sfz":      ["身份证","员工身份证号",3],
+                "wx":       ["微信账号","员工微信登录乾耀小程序的 Openid，用以身份识别",3]
+            },
+            "creation": {
+                "openid":   "varchar",
+                "avatar":   "varchar",
+                "mobile":   "varchar",
+                "sfz":      "varchar",
+                "wx":       "varchar NOT NULL DEFAULT '{}'"
+            },
+            "join": {},
+            "column": {
+                "includes": ["avatar"],
+                "hideintable":  ["sfz","mobile"],
+                "hideinform":  [],
+                "sort": [],
+                "filter": [],
+                "search": ["mobile","sfz"],
+                "time": {},
+                "select": {},
+                "file": {
+                    "avatar": {
+                        "inputFilesMaxLength": 0,
+                        "uploadTo": "${uid}",
+                        "accept": "image/*,.svg",
+                        "showListMode": "item"
+                    }
+                },
+                "number": {},
+                "switch": [],
+                "json": {
+                    "wx": {
+                        "type": "associate",
+                        "default": {
+                            "qypms": "",
+                            "qyoms": ""
+                        }
+                    }
+                },
+                "validator": {
+                    "mobile": ["mobile","手机号格式错误"],
+                    "sfz": ["sfz","身份证号格式错误"]
+                },
+                "generator": {}
+            }
+        }
+    }
+
+}

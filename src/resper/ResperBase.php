@@ -20,6 +20,7 @@ use Cgy\App;
 use Cgy\Module;
 use Cgy\Event;
 use Cgy\module\Configer;
+use Cgy\module\proxyer\OrmProxyer;
 use Cgy\util\Is;
 use Cgy\util\Arr;
 use Cgy\util\Cls;
@@ -202,17 +203,17 @@ class ResperBase
             return $result;
         }
 
+        //入站中间件处理
+        $this->middlewareProcess("in");
+
         /**
          * 执行 Uac 权限验证
          * 验证不通过，将在 Uac 实例内部执行相应的 终止响应操作
          */
         if (Uac::on()===true) {
             //暂停验证
-            //$this->uac->verify();
+            $this->uac->verify();
         }
-
-        //入站中间件处理
-        $this->middlewareProcess("in");
 
         //创建 Response 实例
         $response = Response::current();
@@ -263,7 +264,7 @@ class ResperBase
      */
 
     /**
-     * resper 类 内部 文件/路径 查找
+     * 响应者 内部 文件/路径 查找
      * !! 子类可覆盖
      * @param String $path 文件/路径
      * @param Mixed $params 
@@ -280,7 +281,7 @@ class ResperBase
         $dfp = ["inDir" => DIR_ASSET];
         if (Is::nemarr($params) && Is::associate($params)) {
             $params = Arr::extend($dfp, $params);
-        } else if ($params!==false) {
+        } else if (is_bool($params)/*$params!==false*/) {
             $params = $dfp;
         } else {
             $params = false;
@@ -444,6 +445,8 @@ class ResperBase
                 case "ctx": return $ps; break;
                 //$this->cls 返回当前 resper 的 类名 不是全名
                 case "cls": return Cls::name($this); break;
+                //$this->rtp 返回当前 resper 响应者的 runtime 运行时参数缓存目录
+                case "rtp": return ROOT_PATH.DS."runtime".DS.strtolower($this->type).DS.strtolower($this->cls).DS; break;
                 
                 /**
                  * $this->path 获取 响应者类 所在路径前缀
@@ -456,9 +459,17 @@ class ResperBase
                     if ($this->type == "Resper") {
                         //响应者是 Resper 类
                         $cla = explode("/", $clp);
-                        if (count($cla)>2 && in_array(strtolower($cla[0]), ["app", "module"])) {
-                            //定义在 app / module 路径下的 Resper 类
+                        if (in_array(strtolower($cla[0]), ["app", "module"])) {
+                            /**
+                             * 定义在 app / module 路径下的 Resper 类
+                             * 如：app/foo/ResperBar 类
+                             * 根路径为：app/foo
+                             * !! 这种情况下，路径长度一定大于 2
+                             */
                             $clp = implode("/", array_slice($cla, 0,2));
+                        } else {
+                            //自定义 Resper 响应者，必须定义在 WEB_ROOT/library 下
+                            $clp = "root/library/".implode("/", $cla);
                         }
                     }
                     return $clp;
@@ -490,6 +501,7 @@ class ResperBase
                  * $this->configer 获取 Resper::$config 实例
                  */
                 case "configer":
+                case "config":
                     return Resper::$config;
                     break;
 
@@ -689,7 +701,7 @@ class ResperBase
 
     /**
      * 响应 Orm 数据库操作 请求
-     * 由 Orm 实例代理
+     * 由 module/proxyer/OrmProxyer 代理类 代理响应方法
      * !! 子类 不要 覆盖 !!
      * @return Mixed
      */
@@ -700,8 +712,10 @@ class ResperBase
             return null;
         }
 
-        //调用 Orm 实例的 response 方法，响应此请求
-        return $this->orm->response(...$args);
+        //启动 orm 代理类
+        $ormProxyer = new OrmProxyer(...$args);
+        //调用 orm 代理类的 response 方法，响应此请求
+        return $ormProxyer->response();
     }
 
     /**

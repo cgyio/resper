@@ -25,7 +25,8 @@ trait Package
         "unit" => "unit",
         "netwt" => "netwt",
         "maxunit" => "maxunit",
-        "minnum" => "minnum"
+        "minnum" => "minnum",
+        "midunit" => "midunit",
     ];
 
     /**
@@ -138,7 +139,7 @@ trait Package
                 $coli = $ctx["column"][$coln];
                 $isnum = in_array($coln, $nums);
                 $mtype = $isnum ? "Num" : "Price";
-                $fn = $coln."Pkg";
+                $fn = $coln."_pkg";
                 $fc = [
                     "name" => $fn,
                     "title" => $coli["title"]."(件)",
@@ -158,7 +159,7 @@ trait Package
 
                 if ($isnum && count($prcs)>0) {
                     //如果此记录包含价格字段，则针对所有数量字段，增加一个 自动计算总价的 计算字段
-                    $cfn = $coln."Cost";
+                    $cfn = $coln."_cost";
                     $cfc = [
                         "name" => $cfn,
                         "title" => $coli["title"]."(总价)",

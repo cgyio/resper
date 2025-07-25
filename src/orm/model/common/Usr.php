@@ -14,6 +14,7 @@ use Cgy\orm\Model;
 use Cgy\orm\model\ModelSet;
 use Cgy\orm\model\Record;
 use Cgy\Uac;
+use Cgy\uac\Operation;
 use Cgy\util\Is;
 
 class Usr extends Model 

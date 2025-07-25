@@ -120,6 +120,7 @@ class Queryer
 
         //合并 复合查询条件数据
         if (!$hasExtra) $extra = [];
+        $input = [];
         if ($mixin) {
             //读取 当前 Request 实例的 inputs 数据
             $input = Request::$current->inputs->json;

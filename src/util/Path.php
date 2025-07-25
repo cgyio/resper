@@ -303,12 +303,6 @@ class Path extends Util
         return true;
     }
 
-
-
-    /**
-     * tools
-     */
-
     /**
      * 批量 对 path 进行处理，返回正确的路径字符串
      * @param String $path
@@ -366,5 +360,41 @@ class Path extends Util
         (is_dir("$dir/$file")) ? self::del("$dir/$file") : unlink("$dir/$file");
         }
         return rmdir($dir);
+    }
+
+    /**
+     * 创建文件，如果路径不存在，自动创建路径(多级)
+     * @param String $path 要创建的文件路径
+     * @param String $content 文件内容，指定 则写入新创建的文件
+     * @return Bool 是否创建成功
+     */
+    public static function mkfile($path, $content=null)
+    {
+        if (!Is::nemstr($path)) return false;
+        //先判断文件是否已经存在
+        if (file_exists($path)) {
+            //如果指定了 content 则写入
+            if (Is::nemstr($content)) return file_put_contents($path, $content)!==false;
+            //未指定直接返回 true
+            return true;
+        }
+
+        //检查路径是否存在
+        $dir = dirname($path);
+        if (!is_dir($dir)) {
+            //路径不存在，创建，最后一个参数 true 表示创建多级路径
+            if (mkdir($dir, 0777, true)===false) {
+                //创建路径失败
+                return false;
+            }
+        }
+
+        //目录权限
+        @chmod($dir, 0777);
+
+        //创建文件，并写入              content
+        if (!Is::nemstr($content)) $content ="";
+        return file_put_contents($path, $content)!==false;
+        
     }
 }

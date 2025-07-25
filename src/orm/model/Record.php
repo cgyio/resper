@@ -36,7 +36,7 @@ class Record
     public $origin = [];
     //join 关联表 记录实例
     public $joined = [
-        //"Tablename" => model instance,
+        //"table_name" => model instance,
         //...
     ];
     //是否新建 记录
@@ -96,7 +96,7 @@ class Record
         if (empty($data) || !isset($data[$idf])) {
             //标记为 新建(未保存)记录
             $this->isNew = true;
-            $data = Arr::extend($dft, $data);
+            $data = Arr::extend(static::$config->default, $data);
             //if (empty($data)) $data = static::$config->default;
         }
         
@@ -108,7 +108,8 @@ class Record
         if (empty($jtbs)) $mdata = $data;
         $cdata = Arr::copy($data);
         foreach ($jtbs as $i => $tbn) {
-            $tbn = strtolower($tbn);
+            //数据表名 全小写，下划线
+            $tbn = Orm::snake($tbn);    //strtolower($tbn);
             $jdi = [];
             foreach ($cdata as $f => $v) {
                 if (substr($f, 0, strlen($tbn)+1)==$tbn."_") {
@@ -129,9 +130,8 @@ class Record
         //创建 join 关联表 实例
         if (!empty($jdata)) {
             foreach ($jdata as $tbi => $tdi) {
-                $tbk = ucfirst($tbi);
                 $tcls = static::$db->model($tbi);
-                $this->joined[$tbk] = $tcls::create($tdi);
+                $this->joined[$tbi] = $tcls::create($tdi);
             }
         }
         
@@ -236,6 +236,7 @@ class Record
 
         //要求此 数据表(模型) 类必须经过初始化
         if (!static::$db instanceof Db) return null;
+        $db = static::$db;
 
         /**
          * 通过 $rs->exporter->export($key) 方法，返回数据记录 字段值/关联表字段值
@@ -260,30 +261,41 @@ class Record
         if (strtolower($key) == "resper") return static::$resper;
 
         /**
-         * $rs->Db / $rs->db / $rs->Main
+         * $rs->Orm / $rs->orm 
+         * 返回 static::$db->orm
+         */
+        if (strtolower($key) == "orm") return $db->orm;
+
+        /**
+         * $rs->Db / $rs->db / $rs->Main / $rs->FooBar / $rs->foo_bar
          * 返回 $model::$db
          */
-        if (strtolower($key) == "db" || strtolower($key) == strtolower(static::$db->name)) {
-            return static::$db;
-        }
+        if (strtolower($key) == "db" || Orm::snake($key) == $db->name) return $db;
 
         /**
-         * $rs->Model / $rs->model / $rs->Mdn
+         * $rs->Model / $rs->model / $rs->Mdn / $rs->FooBar / $rs->foo_bar
          * 相当于 $db->Mdn
          */
-        if (strtolower($key) == "model" || strtolower($key) == strtolower(static::$config->name)) {
-            $tbn = ucfirst(static::$config->name);
-            return static::$db->$tbn;
+        if (strtolower($key) == "model" || Orm::snake($key) == static::$config->table) {
+            $mdn = static::$config->name;
+            return $db->$mdn;
         }
 
         /**
-         * $rs->Othermodel
+         * $rs->OtherModelName
+         * $rs->other_model_name
          * 访问 当前 数据库下 其他 数据表(模型) 类
          * 相当于 $db->Other
          */
-        if (static::$db->hasModel($key)) {
-            return static::$db->$key;
-        }
+        if ($db->hasModel($key)) return $db->$key;
+
+        /**
+         * $rs->OtherDbName
+         * $rs->other_db_name
+         * 访问当前 Orm 实例中的 其他数据库实例
+         * 相当于 $db->db(OtherDbName)
+         */
+        if ($db->hasDb($key)) return $db->db($key);
 
         /**
          * $rs->conf / $rs->Conf
@@ -319,9 +331,13 @@ class Record
          */
         $conf = static::$config;
         $gfds = $conf->getters;
-        if (in_array($method, $gfds)) {
-            //手动定义的 getter
-            $getter = $method."Getter";
+        //转为 计算字段名 全小写 下划线
+        $gfdn = Orm::snake($method);
+        //检查是否包含 此 计算字段
+        if (in_array($gfdn, $gfds)) {
+            //存在 手动定义的 getter
+            //计算字段名 转为 方法名，首字母小写
+            $getter = Orm::camel($gfdn, false)."Getter";
             if (method_exists($this, $getter)) {
                 return $this->$getter();
             }
@@ -355,9 +371,11 @@ class Record
         
         ) {
             $db = static::$db;
-            $mdn = ucfirst(static::$config->name);
+            $mdn = static::$config->name;
             return $db->$mdn->$method(...$args);
         }
+
+        
 
 
         return null;

@@ -17,6 +17,7 @@ use Cgy\Orm;
 use Cgy\orm\Db;
 use Cgy\orm\Model;
 use Cgy\orm\model\Record;
+use Cgy\uac\Config;
 use Cgy\uac\Jwt;
 use Cgy\uac\Operation;
 use Cgy\Log;
@@ -60,7 +61,7 @@ class Uac
     public $resper = null;
 
     //Orm 初始化参数
-    public $config = [];
+    public $config = null;
 
     //是否启用 UAC 控制
     public $enable = false;
@@ -99,9 +100,10 @@ class Uac
             $this->enable = false;
             return $this;
         }
+        //实例化 uac/Config
+        $this->config = new Config($uacc);
 
         //启动 Uac
-        $this->config = $uacc;
         $this->enable = true;
 
         //实例化 jwt 处理类
@@ -143,9 +145,20 @@ class Uac
             return true;
         }
 
+        //获取 当前请求的 操作标识
+        $copr = Uac::copr();
+        if ($copr===true) {
+            /**
+             * 当前 操作标识 返回 true 
+             * 表示此时不需要验证权限，应在请求的响应方法内部 自行验证权限
+             */
+            return true;
+        }
+
+
         //检查必须的 usr/role 数据表是否存在
         $orm = $this->resper->orm;
-        $mdc = $this->config["model"] ?? [];
+        $mdc = $this->config->model ?? [];
         $utb = $mdc["usr"] ?? null;
         $rtb = $mdc["role"] ?? null;
         if ($orm->hasModel($utb)===false || $orm->hasModel($rtb)===false) {
@@ -201,21 +214,12 @@ class Uac
              * 前置验证成功，开始验证用户权限
              * 验证用户是否拥有 当前请求的响应方法的权限
              */
-            //获取 当前请求的 操作标识
-            $copr = Uac::copr();
             if ($copr===false || is_null($copr) || (!is_bool($copr) && !Is::nemstr($copr))) {
                 /**
                  * 获取 操作标识 发生错误，不能通过验证
                  * !! 作为框架错误（生产环境中不应存在此错误），直接返回错误信息，并终止响应
                  */
                 trigger_error("uac/fatal::无法取得当前请求的操作标识，导致无法执行权限验证", E_USER_ERROR);
-            }
-
-            if ($copr===true) {
-                /**
-                 * 操作标识 返回 true 标识此时不需要验证权限，应在请求的响应方法内部 自行验证权限
-                 */
-                return true;
             }
 
             //正常返回 当前请求的 操作标识，调用 用户实例 验证权限
@@ -271,7 +275,7 @@ class Uac
 
     /**
      * 从当前的请求中解析出 操作标识，以供权限确认
-     * 调用 $this->opr->current()
+     * 调用 Operation::current() 方法
      * @return String|Bool|null
      * 返回 true 时，直接通过权限验证，针对一些不需要权限的 操作
      * 返回 false|null 时，直接权限验证失败，可能是缺少必要的权限验证条件
@@ -282,12 +286,15 @@ class Uac
         //如果当前未启用 Uac 则返回 true 直接通过验证
         if (Uac::on()!==true) return true;
         $uac = Uac::$current;
-
         //获取当前的 权限操作处理类实例，不存在则返回 null 直接验证失败
         $opr = $uac->opr;
         if (!$opr instanceof Operation) return null;
+        //从请求中解析出 操作标识
+        $copr = $opr::current();    //$opr->current();
+        //如果此操作标识，不在 操作列表 中，表示此操作不需要权限控制，直接返回 true
+        if (!$opr->hasOperation($copr)) return true;
 
-        return $opr->current();
+        return $copr;
     }
 
     /**
@@ -325,6 +332,53 @@ class Uac
     }
 
     /**
+     * 全局快速权限判断
+     * Uac::granted([true|false,] opr1, opr2, ...)
+     * @param Array $oprs 要验证权限的 操作标识列表
+     * @return Array 统一的 权限验证结果数据
+     */
+    public static function granted(...$oprs)
+    {
+        //未开启权限控制，直接返回通过
+        if (Uac::on()!==true) return Uac::rtn(true);
+        //当前 uac 实例
+        $uac = Uac::$current;
+        //关联到 uac 实例的 操作管理类 operation 类实例
+        $opr = $uac->opr;
+        
+        $all = false;
+        if (is_bool($oprs[0])) {
+            //如果第一个参数是 boolean 则作为 $all 参数
+            $all = array_shift($oprs);
+        }
+        //先将 要验证的操作列表中的 不需要权限控制的 操作 排除掉
+        $alloprs = $opr->getAllAuthOprs();
+        $diff = array_diff($oprs, $alloprs);    //不需要验证权限的操作
+        if (empty($diff)) {
+            $noprs = $oprs;
+        } else {
+            $noprs = array_diff($oprs, $diff);
+        }
+        if (empty($noprs)) {
+            //最终需要验证权限的 操作列表为空，直接返回通过
+            return Uac::rtn(true);
+        }
+
+        //将 all 参数插回 oprs 参数数组首位
+        array_unshift($noprs, $all);
+        
+        //已登录的用户
+        $usr = $uac->usr;
+        if (!$usr instanceof Record) {
+            //用户还未登录
+            return Uac::rtn(false, [], "用户未登录");
+        }
+
+        //调用 用户实例 执行权限验证
+        return $usr->ac(...$noprs);
+    }
+
+    /**
      * __callStatic
      * 全局 Uac 相关操作，大部分通过此方法
      */
@@ -357,7 +411,7 @@ class Uac
 
         /**
          * 全局快速权限判断
-         * Uac::granted([true|false,] opr1, opr2, ...)
+         * //Uac::granted([true|false,] opr1, opr2, ...)
          * Uac::grantedDbPmsPsku([true|false,] 'create', 'delete')
          * Uac::grantedDbPmsPskuApi([true|false,] 'foo', 'bar')
          * Uac::grantedApiAppPms([true|false,] 'foo', 'bar')
@@ -368,7 +422,7 @@ class Uac
             if ($uacLogin!==true) return Uac::rtn(false, [], "用户未登录");
             
             //Uac::granted()
-            if ($key=="granted") return $usr->ac(...$args);
+            //if ($key=="granted") return $usr->ac(...$args);
 
             /**
              * Uac::grantedDbPmsPsku()
@@ -407,7 +461,7 @@ class Uac
         if (in_array($key, ["Usr","Role"])) {
             if ($uacEnable!==true) return null;
             $orm = Orm::$current;
-            $mdc = $uac->config["model"] ?? [];
+            $mdc = $uac->config->model ?? [];
             $tbn = $mdc[strtolower($key)] ?? null;
             if (Is::nemstr($tbn) && $orm->hasModel($tbn)!==false) {
                 //返回 Db 实例，并将 Db 实例内部指针指向 $tbn

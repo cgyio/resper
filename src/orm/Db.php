@@ -30,7 +30,7 @@
 namespace Cgy\orm;
 
 use Cgy\Orm;
-use Cgy\orm\Config;
+use Cgy\orm\config\DbConfig;
 //use Cgy\orm\Table;
 use Cgy\orm\Model;
 use Cgy\orm\Curd;
@@ -137,9 +137,8 @@ class Db
     {
         $dir = $this->pathinfo["dirname"];
         if ($path=="") return $dir;
-        $path = Str::tpl($path, [
-            "name" => $this->name
-        ]);
+        $info = $this->info();
+        $path = Str::tpl($path, $info);
         $dp = $dir.DS.str_replace("/", DS, trim($path,"/"));
         if ($exists) {
             if (file_exists($dp) || is_dir($dp)) return $dp;
@@ -155,10 +154,14 @@ class Db
      */
     public function info($xpath="")
     {
-        $ks = explode(",", "type,connectOptions,name,key,pathinfo,driver,orm");
+        $ks = explode(",", "type,connectOptions,name,key,pathinfo,driver,orm,config");
         $info = [];
         foreach ($ks as $i => $k) {
-            $info[$k] = $this->$k;
+            if ($k=="config") {
+                $info[$k] = $this->config instanceof DbConfig ? $this->config->ctx() : [];
+            } else {
+                $info[$k] = $this->$k;
+            }
         }
         if ($xpath=="") return $info;
         return Arr::find($info, $xpath);
@@ -174,6 +177,17 @@ class Db
     {
         $db = $this->orm->$dbn;
         return $db;
+    }
+
+    /**
+     * 检查当前数据库所属 Orm 实例下 是否启用了 其他数据库
+     * 调用 $orm->hasDb()
+     * @param String $dbn 数据库名，可以是 驼峰/下划线 格式
+     * @return String|false 存在则返回 正确的数据库名 下划线格式，不存在则返回 false
+     */
+    public function hasDb($dbn)
+    {
+        return $this->orm->hasDb($dbn);
     }
 
     /**
@@ -215,27 +229,24 @@ class Db
      */
     public function models($init=false)
     {
+        //直接从 $db->config->model 中获取 各数据模型类全称
         $mds = $this->config->models;
-        if ($init) {
-            $mclss = array_map(function ($i) {
-                return $this->model($i);
-            }, $mds);
-        } else {
-            $mclss = array_map(function ($i) {
-                return $this->hasModel($i);
-            }, $mds);
+        $mdo = $this->config->model;
+        $mclss = [];
+        foreach ($mds as $mdn) {
+            $mdc = $mdo[$mdn] ?? [];
+            $clsn = $mdc["clsn"] ?? null;
+            if (!Is::nemstr($clsn) || !class_exists($clsn)) continue;
+            if ($init) $this->model($mdn);
+            $mclss[] = $clsn;
         }
-        //var_dump($mclss);
-        $mclss = array_merge(array_filter($mclss, function ($i) {
-            return !empty($i) && class_exists($i);
-        }));
         return $mclss;
     }
 
     /**
      * 获取所有定义的 数据表(模型) 类名称
      * @param Bool $init 是否初始化这些类 默认 false
-     * @return Array [ 类名称, ... ]
+     * @return Array [ 类名称(首字母大写), ... ]
      */
     public function modelNames($init=false)
     {
@@ -255,6 +266,34 @@ class Db
      */
     public function hasModel($model)
     {
+        //先判断一下，针对直接传入模型类全称的情况
+        if (Is::nemstr($model) && strpos($model,"\\")!==false) {
+            if (class_exists($model)) {
+                //如果传入了已存在的 类全称，则检查是否存在于 $this->config->model[***]["clsn"]
+                foreach ($this->config->model as $k => $cv) {
+                    if (isset($cv["clsn"]) && $cv["clsn"]==$model) return $model;
+                }
+            }
+            return false;
+        }
+        //转换为 数据表名 格式
+        $tbn = Orm::snake($model);
+        //检查是否存在于 $db->config->models 数组中，取得实际 数据模型名
+        $mds = $this->config->models;
+        if (!in_array($tbn, $mds)) return false;
+
+        //从 $db->config->model[$mdn] 中读取 clsn 属性，即 数据模型类全称
+        $mdc = $this->config->model[$tbn] ?? [];
+        $cls = $mdc["clsn"] ?? null;
+        if (Is::nemstr($cls) && class_exists($cls)) return $cls;
+
+        //不存在 clsn 属性则返回 false
+        return false;
+
+
+        /**
+         * _bak 20250717
+         */
         //检查当前 resper 是否存在
         if (!$this->resper instanceof Resper) return false;
         
@@ -371,7 +410,7 @@ class Db
              * $db->Model->property 
              * 访问 数据表(模型) 类属性 静态属性
              */
-            if (Cls::hasProperty($model, $key, 'static,public')) {
+            if (Cls::hasProperty($model, $key, '&static,public')) {
                 return $model::$$key;
             }
 
@@ -383,20 +422,6 @@ class Db
             $cnt = $model::$config->$key;
             if (!empty($cnt)) return $cnt;
 
-            /**
-             * 如果 curd 操作已被初始化为 针对 此 model
-             */
-            //if ($this->curdInited && $this->curd->model == $model) {
-            //    $curd = $this->curd;
-                /**
-                 * $db->Model->curdProperty
-                 * 访问 curd 操作实例的 属性
-                 * !! 不推荐，推荐：$db->Model->curd->property
-                 */
-            //    if (property_exists($curd, $key)) {
-            //        return $curd->$key;
-            //    }
-            //}
 
         }
 
@@ -454,7 +479,7 @@ class Db
              * $db->Model->func()
              * 调用 数据表(模型) 类方法 静态方法
              */
-            if (Cls::hasMethod($model, $key, "static,public")) {
+            if (Cls::hasMethod($model, $key, "&static,public")) {
                 $rst = $model::$key(...$args);
                 if ($rst == $model) {
                     //如果方法返回 数据表(模型) 类，则返回 $db 自身，等待下一步操作
@@ -596,137 +621,56 @@ class Db
 
 
     /**
-     * api 操作
-     * 可以通过 URI 请求，执行 ***Api 方法
+     * Proxy 代理响应方法
+     * 通过 url 访问 数据库的实例方法，将被发送到这些方法中
+     * 例如：
+     * https://[host]/[resper]/db/[dbn]/foo_bar  -->  static::fooBarProxy
+     * 
+     * 数据模型固有的 操作方法：在 uac/Operation::$dftDbOprs 中定义
+     *      install     --> installProxy
+     *      manual      --> manualProxy
+     * 
+     * 操作权限验证 在对应的 OrmProxyer 类中执行，此处仅定义操作逻辑
      */
 
     /**
-     * 执行任意 api 操作
-     * @param String $api 方法名，不含末尾 "Api"
-     * @param Array $args URI 参数
-     * @return Mixed
+     * proxy 代理响应方法
+     * @name install
+     * @title 安装/重建数据库
+     * @desc 在开发阶段安装/重建数据库
+     * @auth false
+     * 
+     * @param Array $args URI 参数序列
+     * @return Db 实例
      */
-    public function execApis($api, ...$args)
+    public function installProxy(...$args)
     {
-        $m = $this->hasApi($api);
-        if ($m===false) {
-            trigger_error("orm/api::请求的 Api 不存在，Api = ".$this->name."/".$api, E_USER_ERROR);
-        }
-        return $this->$m(...$args);
-    }
-
-    /**
-     * 判断是否存在 api
-     * @param String $api 方法名，不含末尾 "Api"
-     * @return Mixed 存在则返回 完整的方法名，不存在 返回 false
-     */
-    public function hasApi($api)
-    {
-        $fn = lcfirst($api)."Api";
-        if (method_exists($this, $fn)) return $fn;
-        return false;
-    }
-
-    /**
-     * api
-     * 根据 json 预设，创建表 / 修改表字段结构
-     * @param String $model 数据模型(表) 名称
-     * @return Bool
-     */
-    public function installApi($model = null)
-    {
-        if (!Is::nemstr($model)) return false;
-
-        //获取原记录集
-        $tbn = lcfirst($model);
-        $has = $this->hasTable($tbn);
-        if ($has===false) {
-            $ors = [];
-        } else {
-            $ors = $this->medoo("select", $tbn, "*");
-            //return $ors;
-        }
-
-        //从其他数据库获取原记录
-        $dbase = new Medoo([
-            "type" => "sqlite",
-            "database" => "/www/cgydev.work/app/index/library/db/usr.db"
-        ]);
-        $ors = $dbase->select($tbn, "*");
-        //return $ors;
-
-        //删除原表
-        if ($has!==false) {
-            $this->medoo("drop", $tbn);
-        }
-
-        //创建新表
-        $creation = $this->config->ctx("model/$tbn/creation");
-        //return $creation;
-        $sql = [];
-        foreach ($creation as $col => $csql) {
-            $sql[] = "`$col` $csql";
-        }
-        $sql = implode(", ", $sql);
-        $sql = "CREATE TABLE IF NOT EXISTS `$tbn` ($sql)";
-        //return $sql;
-        $this->medoo("query", $sql);
-
-        //写入原记录
-        if (!empty($ors)) {
-            //使用事务
-            $this->medoo("action", function($db) use ($ors, $tbn, $creation) {
-                for ($i=0;$i<count($ors);$i++) {
-                    $rsi = $ors[$i];
-                    $vi = [];
-                    foreach ($rsi as $col => $val) {
-                        if (!isset($creation[$col])) continue;
-                        if (is_null($val)) {
-                            $vi[$col] = "";
-                        } else if (is_numeric($val)) {
-                            $vi[$col] = $val;
-                        } else {
-                            $vi[$col] = "'$val'";
-                        }
-                    }
-                    $db->insert($tbn, $vi);
-                }
-            });
-        }
-
-        //返回新建表 参数 以及 记录
-        $model = $this->model($model);
-        $nrs = $this->medoo("select", $tbn, "*");
+        //耗时
+        $ts = time();
+        //调用 install 方法，默认重建记录
+        $this->install(null, true);
+        //返回通过 sql 查询到的数据表数组
+        $tbns = $this->getTableNames();
         return [
-            "success" => true,
-            "model" => empty($model) ? "No Class File ".ucfirst($model).EXT : $model::$config->context,
-            "rs" => $nrs
+            "timeSpend" => (time()-$ts)." sec",
+            "tables" => $tbns
         ];
     }
 
-
-
     /**
-     * 入口 Action 功能
-     * 通过 https://[host]/[appname]/[dbname]/... 调用的 数据库 action
-     */
-    /**
-     * [url]/create
-     * 创建数据库
-     */
-    /**
-     * [url]/update
-     * 更新数据库结构
+     * proxy 代理响应方法
+     * @name manual
+     * @title 手动管数据库
+     * @desc 超级用户手动管数据库
+     * @auth true
      * 
-     * @param Array $args URI
-     * @return Mixed
+     * @param Array $args URI 参数序列
+     * @return Db 实例
      */
-    public function updateAction()
+    public function manualProxy(...$args)
     {
-        return "update db ".$this->app->name."/".$this->name;
+        
     }
-
-    
 
 
 

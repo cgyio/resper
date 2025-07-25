@@ -26,6 +26,7 @@ use Cgy\App;
 use Cgy\Module;
 use Cgy\Event;
 use Cgy\util\Is;
+use Cgy\util\Str;
 use Cgy\util\Arr;
 use Cgy\util\Cls;
 use Cgy\util\Path;
@@ -416,8 +417,8 @@ class Resper extends ResperBase
             return ["empty", []];
         }
 
-        //查找 响应方法
-        $m = $uri[0];
+        //查找 响应方法 方法名转为 驼峰，首字母小写 格式
+        $m = Str::camel($uri[0], false);
         /**
          * !! 排除一些固定的 resper 实例方法，这些方法不能作为响应方法
          */

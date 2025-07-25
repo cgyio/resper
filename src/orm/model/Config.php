@@ -18,19 +18,38 @@ use Cgy\Orm;
 use Cgy\orm\Db;
 use Cgy\orm\Model;
 use Cgy\orm\model\config\AutoGettersCreator;
+use Cgy\uac\Operation;
+use Cgy\module\Configer;
 use Cgy\util\Is;
 use Cgy\util\Arr;
 use Cgy\util\Str;
+use Cgy\util\Path;
 use Cgy\util\Conv;
 use Cgy\util\Cls;
 
+use Cgy\module\configer\traits\runtimeCache;
+
 class Config
 {
+    /**
+     * 使用 runtime 缓存功能
+     */
+    use runtimeCache;
+
     /**
      * 缓存 config 实例
      * key = "CFG_".md5($model::$cls 类全称)
      */
     public static $CACHE = [];
+
+    /**
+     * 定义 model 配置参数中的 meta 元数据项
+     * 子数据库配置文件中，每个数据表参数 应包含这些项目
+     */
+    public static $metas = [
+        "name", "title", "desc",
+        "clsn", "path", "runtime",
+    ];
 
     /**
      * 依赖：
@@ -120,6 +139,9 @@ class Config
         $this->model = $model;
         //保存初始参数
         $this->init = $conf;
+
+        //runtime 缓存文件路径
+        $this->runtimeCache = $this->init["runtime"] ?? null;
         
         /**
          * 生成 context
@@ -127,6 +149,15 @@ class Config
          * 或 根据 init 解析生成
          */
         $this->getContext();
+
+        /**
+         * 缓存 config 实例 到 Model::$CACHE
+         * 键名：CFG_md5(模型类全称)
+         */
+        $ck = "CFG_".md5($model);
+        if (!isset(self::$CACHE[$ck]) || !self::$CACHE[$ck] instanceof Config) {
+            self::$CACHE[$ck] = $this;
+        }
     }
 
     /**
@@ -137,7 +168,7 @@ class Config
      */
     public function getContext()
     {
-        $conf = $this->getRuntimeConfig();
+        $conf = $this->getRuntimeContext();
         if (Is::nemarr($conf)) {
             $this->context = $conf;
         } else {
@@ -152,14 +183,15 @@ class Config
             $this->parseGetters();
             // 5  解析 API
             $this->parseApi();
-            // 6  解析其他参数
+            // 6  解析 Proxy 代理响应方法，静态方法
+            $this->parseProxyMethods();
+            // 7  解析其他参数
             $this->parseModelMeta();
-            // 7  调用 各 数据模型 自定义的 (可能通过 trait 引入的) 参数解析方法
+            // 8  调用 各 数据模型 自定义的 (可能通过 trait 引入的) 参数解析方法
             $this->parseCustomConf();
 
             // 最后  创建运行时 config 文件，加快运行速度
-            //TODO: 保存到 [dbpath]/runtime/[dbname]/[modelname].json
-            //...
+            $this->cacheRuntimeContext();
             
         }
 
@@ -200,6 +232,26 @@ class Config
          * $config->ctx  -->  $config->context
          */
         if ($key=="ctx") return $this->context;
+
+        /**
+         * runtime 运行时缓存相关
+         */
+        if ($key=="cached") return $this->context["__USE_CACHE__"] ?? false;
+        if ($key=="cachetime") return $this->context["__CACHE_TIME__"] ?? 0;
+
+        /**
+         * $config->meta  --> 返回元数据 []
+         */
+        if ($key=="meta") {
+            $mt = [];
+            foreach (static::$metas as $k) {
+                if (isset($this->context[$k])) {
+                    $mt[$k] = $this->context[$k];
+                }
+            }
+            $mt["table"] = $this->context["table"];
+            return $mt;
+        }
         
         /**
          * $config->foo  -->  $config->context["foo"]
@@ -207,13 +259,24 @@ class Config
         if (isset($this->context[$key])) return $this->context[$key];
 
         /**
-         * $config->columnName  -->  $config->context["column"]["foo"]
+         * $config->fooColumn  -->  $config->context["column"]["foo"]
+         * $config->FooBarColumn --> $config->context["column"]["foo_bar"]
+         * $config->Foo -->  $config->context["column"]["foo"]
+         * $config->foo -->  $config->context["column"]["foo"]
+         * $config->FooBar -->  $config->context["column"]["foo_bar"]
+         * $config->fooBar -->  $config->context["column"]["foo_bar"]
          */
         $fdc = $this->context["column"];
-        if (isset($fdc[$key]) || substr($key, -6)==="Column") {
+        if (substr($key, -6)==="Column" && strlen($key)>6) {
+            $fdn = substr($key, 0, -6);
+        } else {
             $fdn = $key;
-            if (substr($key, -6)==="Column") $fdn = substr($key, 0, -6);
-            if (isset($fdc[$fdn])) return (object)$fdc[$fdn];
+        }
+        //转为 字段名 格式
+        $fdn = Orm::snake($fdn);
+        //如果存在 此字段
+        if (isset($fdc[$fdn])) {
+            return (object)$fdc[$fdn];
         }
 
         /**
@@ -717,6 +780,39 @@ class Config
 
         //手动定义的计算字段
         $model = $this->model;
+        //筛选 protected && !static 方法中的 getter 类型方法，自动解析方法注释，获取方法信息
+        $getters = Cls::specific(
+            $model, 
+            "protected,&!static", 
+            "getter", 
+            null,   //自定义的筛选方法
+            function($mi, $conf) {  //自定义的 方法信息处理方法
+                /**
+                 * getter 方法注释中定义的 type,jstype,phptype 项目处理
+                 */
+                $tp = [];
+                foreach ($conf as $k => $v) {
+                    if (substr($k, -4)==="type") {
+                        $ki = str_replace("type","",$k);
+                        if ($ki=="") $ki = "db";
+                        $tp[$ki] = $v;
+                        //删除原项目
+                        unset($conf[$k]);
+                    }
+                }
+                $conf["type"] = $tp;
+                return $conf;
+            }
+        );
+        //将获取到的 getter 方法信息，写入 context
+        if (Is::nemarr($getters)) {
+            foreach ($getters as $gk => $gc) {
+                $gc["isGetter"] = true;
+                $conf["getters"][] = $gk;
+                $conf["column"][$gk] = $gc;
+            }
+        }
+        /*
         $methods = Cls::methods($model, "protected", function($mi) {
             if (substr($mi->name, -6)==="Getter") {
                 $doc = $mi->getDocComment();
@@ -753,18 +849,20 @@ class Config
                 }
                 $name = $confi["name"] ?? "";
                 if (!Is::nemstr($name)) {
+                    //计算字段名 格式转换
                     $name = str_replace("Getter","", $k);
                     $confi["name"] = $name;
                 }
+                $name = Orm::snake($name);
                 $confi["isGetter"] = true;
                 $conf["getters"][] = $name;
                 $conf["column"][$name] = $confi;
             }
-        }
+        }*/
 
         //针对 特殊类型的字段 自动定义计算字段 ***Str
         //查找 AutoGettersCreator 类中所有 createFoobarAutoGetters 方法
-        $cags = Cls::methodNames(AutoGettersCreator::class, "static,public", function($mi) {
+        $cags = Cls::methodNames(AutoGettersCreator::class, "public,&static", function($mi) {
             $mn = $mi->name;
             return substr($mn, 0, 6)==="create" && substr($mn, -11)==="AutoGetters";
         });
@@ -806,59 +904,73 @@ class Config
             "modelApis" => []
         ];
         $model = $this->model;
-        $methods = Cls::methods($model, "public", function($mi) {
-            if (substr($mi->name, -3)==="Api") {
-                $doc = $mi->getDocComment();
-                if (strpos($doc, "* api")!==false || strpos($doc, "* Api")!==false) {
-                    return true;
+        //筛选 public 方法中的 api 类型方法，自动解析方法注释，获取方法信息
+        $oprpre = Operation::getModelOperatePrefix($model);
+        $modtit = $init["title"] ?? Orm::camel($init["name"], true)."表";
+        $apis = Cls::specific(
+            $model,
+            "public",
+            "api",
+            null,
+            function($mi, $conf) use ($oprpre, $modtit) {
+                //是否静态方法，决定了这个 api 方法是 数据模型api 还是 记录实例api
+                $isStatic = $mi->isStatic();
+                if ($isStatic) {
+                    $oprpre .= "/model"."/api";
+                } else {
+                    $oprpre .= "/api";
                 }
+                //为这些 api 方法增加 uac 相关信息
+                $conf = Cls::parseMethodInfoWithUac($mi, $conf, $oprpre, $modtit);
+                //额外的 信息
+                $conf["isModel"] = $isStatic;
+                return $conf;
             }
-            return false;
-        });
-        if (empty($methods)) return $this->setContext($conf);
-        //对找到的方法，进行处理
-        foreach ($methods as $k => $mi) {
-            $isStatic = $mi->isStatic();
-            $doc = $mi->getDocComment();
-            $doc = str_replace("\\r\\n", "", $doc);
-            $doc = str_replace("\\r", "", $doc);
-            $doc = str_replace("\\n", "", $doc);
-            $doc = str_replace("*\/", "", $doc);
-            $da = explode("* @", $doc);
-            array_shift($da);   //* api
-            $confi = [
-                "name" => "",
-                "role" => "all",
-                "desc" => "",
-                "authKey" => "",    //用户 auth 数组中 如果包含 authKey 则有访问此 api 的权限
-                "isModel" => $isStatic, //静态方法 是 数据表 api 而不是 记录实例 api
-            ];
-            foreach ($da as $i => $di) {
-                $dai = explode(" ", trim(explode("*", $di)[0]));
-                if (count($dai)<2) continue;
-                if (!in_array($dai[0],["desc","role","name","title","authKey"])) continue;
-                $confi[$dai[0]] = implode(" ",array_slice($dai, 1));
+        );
+        //将找到的 api 写入 context
+        if (Is::nemarr($apis)) {
+            foreach ($apis as $ak => $ac) {
+                $isModel = $ac["isModel"];
+                if ($isModel) {
+                    $conf["modelApis"][] = $ak;
+                } else {
+                    $conf["apis"][] = $ak;
+                }
+                $conf["api"][$ak] = $ac;
             }
-            $name = $confi["name"] ?? "";
-            if (!Is::nemstr($name)) {
-                $name = str_replace("Api","", $mi->name);
-                $confi["name"] = $name;
-            }
-            if (is_string($confi["role"]) && $confi["role"]!="all") {
-                $confi["role"] = Arr::mk($confi["role"]);
-            }
-            //$akey = $model::apikey($name);
-            $mda = explode("model\\", strtolower($model));
-            $akey = str_replace("\\","-", trim($mda[1], "\\"));
-            $akey .= ($isStatic ? "-model-api-" : "-api-").$name;
-            $confi["authKey"] = $akey;
-            if ($isStatic) {
-                $conf["modelApis"][] = $name;
-            } else {
-                $conf["apis"][] = $name;
-            }
-            $conf["api"][$name] = $confi;
         }
+        return $this->setContext($conf);
+    }
+
+    /**
+     * 解析 数据表(模型) 类 中定义的 用来 代理响应者作出响应的 proxy 方法
+     * 这些方法必须是 静态方法，且注释中包含 * proxy 且 方法名以 -Proxy 结尾
+     * @param Array $init json 中定义的参数
+     * @return Config $this
+     */
+    protected function parseProxyMethods($init = [])
+    {
+        $init = !Is::nemarr($init) ? $this->init : $init;
+        $conf = [
+            "proxyMethods" => [],
+        ];
+        $model = $this->model;
+        //筛选 public 方法中的 api 类型方法，自动解析方法注释，获取方法信息
+        $oprpre = Operation::getModelOperatePrefix($model);
+        $modtit = $init["title"] ?? Orm::camel($init["name"], true)."表";
+        $prms = Cls::specific(
+            $model,
+            "public,&static",
+            "proxy",
+            null,
+            function($mi, $conf) use ($oprpre, $modtit) {
+                //为这些 api 方法增加 uac 相关信息
+                $conf = Cls::parseMethodInfoWithUac($mi, $conf, $oprpre, $modtit);
+                return $conf;
+            }
+        );
+        //将找到的 proxy 方法 写入 context
+        $conf["proxyMethods"] = $prms;
         return $this->setContext($conf);
     }
 
@@ -873,14 +985,17 @@ class Config
         $conf = [];
 
         //meta 字段
-        $ms = explode(",", "name,title,desc,directedit");
+        $ms = static::$metas;
         foreach ($ms as $i => $mi) { 
             if (isset($init[$mi])) {
                 $conf[$mi] = $init[$mi];
             }
         }
-        $conf["table"] = lcfirst($conf["name"]);
-        $conf["name"] = ucfirst($conf["name"]);
+
+        //数据表名 全小写，下划线
+        $conf["table"] = Orm::snake($conf["name"]);
+        //数据模型名 驼峰，首字母大写
+        $conf["name"] = Orm::camel($conf["name"], true);
 
         //indexs 索引
         $idxs = $init["column"]["indexs"] ?? [];
@@ -1082,23 +1197,37 @@ class Config
      */
 
     /**
-     * tools
-     * 读取 被缓存的 model 参数
-     * 保存在 [dbpath]/runtime/[dbname]/modelname.json
-     * 如果不存在，则返回 null
+     * 读取 被缓存的 model 模型 runtime 运行时参数
+     * 文件路径在 $this->init["runtime"]
+     * 如果不存在，则返回 null 
+     * !! 缓存文件过期时间 1h 过期后重新生成
      * @return Array json --> []
      */
-    public function getRuntimeConfig()
+    /*public function getRuntimeContext()
     {
-        $db = $this->model::$db;
-        $mda = explode("\\", $this->model);
-        $mdn = lcfirst(array_pop($mda));
-        if (!$db instanceof Db) return null;
-        //查找文件
-        $cf = $db->path("runtime/%{name}%/".$mdn.".json", true);
-        if (empty($cf)) return null;
-        return Conv::j2a(file_get_contents($cf));
-    }
+        //读取 runtime 缓存文件路径，应在 orm/Config 类创建时解析得到
+        $cf = $this->init["runtime"] ?? null;
+        if (!Is::nemstr($cf) || !file_exists($cf)) return null;
+        //调用 module/Configer 类的 getRuntimeContextByPath() 方法
+        return Configer::getRuntimeContextByPath($cf);
+    }*/
+    
+    /**
+     * 缓存 解析得到的 model 模型 runtime 运行时参数
+     * 文件路径在 $this->init["runtime"]
+     * @return Bool
+     */
+    /*public function cacheRuntimeContext()
+    {
+        //缓存文件路径
+        $cf = $this->init["runtime"] ?? null;
+        //如果没有指定 缓存路径，返回
+        if (!Is::nemstr($cf)) return false;
+        //要缓存的 参数
+        $conf = Arr::copy($this->context);
+        //调用 module/Configer 类的 cacheRuntimeContextByPath() 方法
+        return Configer::cacheRuntimeContextByPath($conf, $cf);
+    }*/
 
     
 }

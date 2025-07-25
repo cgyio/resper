@@ -21,7 +21,7 @@ class Secure extends Middleware
      */
     public function handle() 
     {
-        $gets = $this->request->gets->context;
+        /*$gets = $this->request->gets->context;
         $posts = $this->request->posts->context;
         foreach ($gets as $k => $v) {
             $sec = utilSecure::str($v);
@@ -30,7 +30,7 @@ class Secure extends Middleware
         foreach ($posts as $k => $v) {
             $sec = utilSecure::str($v);
             $this->request->posts->context[$k] = $sec->context;
-        }
+        }*/
 
         return true;
     }

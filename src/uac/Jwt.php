@@ -99,7 +99,7 @@ class Jwt
     {
         if (!$uac instanceof Uac) return null;
         //设置参数
-        $conf = $uac->config["jwt"] ?? [];
+        $conf = $uac->config->jwt ?? [];
         if (isset($conf["expire"])) $this->expireIn = $conf["expire"];
         if (isset($conf["header"])) $this->requestHeader = $conf["header"];
         if (isset($conf["alg"])) $this->alg = $conf["alg"];
@@ -112,7 +112,7 @@ class Jwt
             $sdir = Path::find($this->secretDir, ["checkDir"=>true]);
         }
         if (is_dir($sdir)) {
-            $this->secretDir = $sidr;
+            $this->secretDir = $sdir;
         } else {
             $this->secretDir = Path::find("resper/uac/jwt", ["checkDir"=>true]);
         }
