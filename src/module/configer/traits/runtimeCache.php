@@ -65,7 +65,8 @@ trait runtimeCache
         $tk = $this->rcTimeKey;
         $sk = $this->rcSignKey;
         $exp = $this->rcExpired;
-        $ct = $conf[$tk] ?? 0;
+        $ct = $conf[$tk] ?? null;
+        $ct = is_null($ct) ? 0 : strtotime($ct);
         if ($ct<=0 || time()-$ct>$exp) return [];     //缓存过期，不读取
         //清除缓存中的 时间戳
         unset($conf[$tk]);
@@ -100,7 +101,7 @@ trait runtimeCache
         if (!Is::nemarr($conf)) return false;
         $conf = Arr::copy($conf);
         //增加时间戳
-        $conf[$this->rcTimeKey] = time();
+        $conf[$this->rcTimeKey] = date("Y-m-d h:i:s",time());
         //删除标记
         unset($conf[$this->rcSignKey]);
         //转为字符串

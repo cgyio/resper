@@ -11,12 +11,14 @@ namespace Cgy;
 
 use Cgy\Request;
 use Cgy\Response;
+use Cgy\response\Exporter;
 use Cgy\Log;
 use Cgy\util\Is;
 use Cgy\util\Arr;
 use Cgy\util\Str;
 use Cgy\util\Path;
 use Cgy\util\Cls;
+use Cgy\util\Conv;
 
 class Error
 {
@@ -184,7 +186,7 @@ class Error
 	 * 在抛出错误之前，执行自定义操作
 	 * 根据 $error->code 执行 ***ErrorBeforeThrow 方法，
 	 * 		$error->code == foo_bar  -->  fooBarErrorBeforeThrow
-	 * 子类可自定义针对不同 code 的 beforeThrow 方法
+	 * !! 子类可自定义针对不同 code 的 beforeThrow 方法
 	 * @return Error $this
 	 */
 	public function beforeThrow()
@@ -202,6 +204,68 @@ class Error
 		}
 
 		return $this;
+	}
+
+	/**
+	 * 抛出错误
+	 * 如果 response 实例已创建，则使用 Response::$current->throwError() 方法
+	 * 如果 response 实例还未创建，则使用自有的 抛出方法
+	 * @return void
+	 */
+	public function throwError()
+	{
+		//只有 必须抛出的错误，才可以被抛出
+		if ($this->mustThrow()) {
+			//执行 抛出前的 自定义方法
+			$this->beforeThrow();
+		}
+
+		//检查 response 实例是否已创建
+		$res = Response::$current;
+		if (!empty($res)) {
+			//已创建，调用 response 实例 抛出错误
+			Response::$current->throwError($this);
+			exit;
+		}
+
+		/**
+		 * response 实例还未创建 表示 此错误发生在 业务方法还未执行之前
+		 */
+		$req = Request::$current;
+		if (empty($req)) {
+			//!! 请求实例还未创建，这是在框架初始化阶段的错误，不应出现在生产环境
+			$format = isset($_GET["format"]) ? strtolower($_GET["format"]) : (
+				defined("EXPORT_FORMAT") ? EXPORT_FORMAT : "html"
+			);
+		} else {
+			//请求实例已创建，通过请求实例，获取输出 format
+			$format = $req->ajax->true ? EXPORT_AJAX : $req->gets->format(EXPORT_FORMAT);
+		}
+		//准备输出数据
+		$exp = Exporter::default();
+		$exp["error"] = true;
+		$exp["errors"][] = $this->data;
+		$exp["data"] = $this->data;
+		//header
+		if ($format=="json") {
+			header("Content-Type: application/json; charset=utf-8");
+		} else {
+			header("Content-Type: text/html; charset=utf-8");
+		}
+		//根据 format 输出
+		switch ($format) {
+			case "dump":
+				var_dump($exp);
+				break;
+			case "json":
+				echo Conv::a2j($exp);
+				break;
+			default :
+				var_export($exp);
+				break;
+		}
+		exit;
+
 	}
 
 	/**
@@ -304,9 +368,11 @@ class Error
 
             if ($err->mustThrow()) {
 				//必须抛出错误时，执行自定义错误类中的 beforeThrow 方法
-                Response::current()->throwError($err->beforeThrow());
+                $err->throwError();
             } else {
-                Response::current()->setError($err);
+				if (!empty(Response::$current)) {
+					Response::$current->setError($err);
+				}
             }
         }
 	}
@@ -358,11 +424,7 @@ class Error
 
 				if (!is_null($err) && $err instanceof Error) {
 					//fatal error 必须抛出错误，执行自定义错误类中的 beforeThrow 方法
-					//if ($err->mustThrow()) {
-						Response::current()->throwError($err->beforeThrow());
-					//} else {
-					//	Response::current()->setError($err);
-					//}
+					$err->throwError();
 				}
 			}
 		}

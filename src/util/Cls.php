@@ -24,7 +24,7 @@ class Cls extends Util
     public static function find($path = "", $ns = null)
     {
         if (!Is::nemstr($path) && !Is::nemarr($path)) return null;
-        $ns = !Is::nemstr($ns) ? (defined("NS") ? NS : "Cgy\\") : strtoupper($ns);
+        $ns = !Is::nemstr($ns) ? (defined("NS") ? NS : "Cgy\\") : $ns;
         $ps = Is::nemstr($path) ? explode(",", $path) : $path;
         $cl = null;
         for ($i=0; $i<count($ps); $i++) {
@@ -36,10 +36,11 @@ class Cls extends Util
 
             $pi = trim($ps[$i], "/");
             $pia = explode("/", $pi);
-            $pin = $pia[count($pia)-1];
-            if (!Str::beginUp($pin)) {
-                $pia[count($pia)-1] = ucfirst($pin);
-            }
+            $pin = array_pop($pia);
+            //类名称 统一转为 驼峰，首字母大写 格式
+            $pin= Str::camel($pin, true);
+            $pia[] = $pin;
+            //拼接 类全称
             $cls = $ns . implode("\\", $pia);
             //var_dump($cls);
             if (class_exists($cls)) {
@@ -507,7 +508,7 @@ class Cls extends Util
         $auth = $conf["auth"] ?? true;
         $conf["auth"] = $auth;
         if ($auth===true) {
-            //启用 uac 控制，处理相关参数 role/oprn
+            //启用 uac 控制
             $role = $conf["role"] ?? "all";
             //指定了允许访问的 用户角色
             if ($role!="all") $role = Arr::mk($role);

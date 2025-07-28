@@ -69,7 +69,7 @@ class Resper extends ResperBase
 
         //可以作为响应方法的 方法名 这些都是一些通用的响应方法
         "common" => [
-            "default", "empty", "uac", "db", "api", "error"
+            "default", "empty", "uac", "db", "api", "notfound"
         ],
     ];
 
@@ -189,6 +189,13 @@ class Resper extends ResperBase
                             $alo->addPsr4($ns.'\\App\\'.$uap.'\\model\\', $psr_ds);
                             $alo->addPsr4($ns.'\\app\\'.$app.'\\model\\', $psr_ds);
                             $alo->addPsr4($ns.'\\app\\'.$uap.'\\model\\', $psr_ds);
+
+                            //module class dir
+                            $psr_ds = [ 
+                                $app_dir.DS."module"
+                            ];
+                            $alo->addPsr4($ns.'\\module\\'.$app.'\\', $psr_ds);
+                            $alo->addPsr4($ns.'\\module\\'.$uap.'\\', $psr_ds);
                             
                             //error class
                             $psr_ds = [
@@ -230,7 +237,7 @@ class Resper extends ResperBase
                 $alo->addPsr4($ns.'\\error\\', ROOT_PATH.DS."error");
 
                 /**
-                 * patch web lib/model class
+                 * patch web lib/model/module class
                  */
                 $lib_ds = array_map(function($i) {
                     return ROOT_PATH.DS.str_replace("/",DS,trim($i));
@@ -240,6 +247,7 @@ class Resper extends ResperBase
                 }, DIR_MODEL);
                 $alo->addPsr4($ns.'\\', $lib_ds);
                 $alo->addPsr4($ns.'\\model\\', $model_ds);
+                $alo->addPsr4($ns.'\\module\\', [ ROOT_PATH.DS."module" ]);
 
             }
         }
@@ -324,41 +332,101 @@ class Resper extends ResperBase
         }
 
         /**
-         *  1  判断是否存在 app / module 类
+         *  1  从预定义的 路由表中 查找，路由表定义在 Resper::$config->context["route"] 中
          */
-        $cls = App::has($uri[0]);
-        $ma = [];
-        if ($cls !== false) {
-            $resper = $cls;
-            $ma = Resper::seekMethod($cls, array_slice($uri, 1));
-        } else {
-            $cls = Module::has($uri[0]);
-            if ($cls !== false) {
-                $resper = $cls;
-                $ma = Resper::seekMethod($cls, array_slice($uri, 1));
+        $route = Resper::$config->route;
+        if (Is::nemarr($route)) {
+            /**
+             * 路由表定义形式：
+             * [
+             *      "/正则表达式/" => [
+             *          "resper" => "响应者类全称 或 可通过 Cls::find() 读取的类名路径",
+             *          "method" => "类中的 响应方法 fooBar",
+             *          "uri" => [ 通过 正则匹配 得到的 响应方法参数 序列 ],
+             *      ],
+             * ]
+             */
+            $ustr = implode("/", $uri);
+            foreach ($route as $pattern => $roi) {
+                //先检查 路由定义
+                $rrsp = $roi["resper"] ?? null;
+                if (Is::nemstr($rrsp) && !class_exists($rrsp)) $rrsp = Cls::find($rrsp);
+                //路由指向的类 不存在
+                if (empty($rrsp) || !class_exists($rrsp)) continue;
+                $rm = $roi["method"] ?? null;
+                //路由指向的方法 不在 类中
+                if (!Is::nemstr($rm) || !method_exists($rrsp, $rm)) continue;
+
+                //使用 正则 匹配 $ustr 字符串
+                try {
+                    $mt = preg_match($pattern, $ustr, $matches);
+                    //未匹配成功，继续下一个
+                    if ($mt !== 1) continue;
+                    //匹配成功，将 匹配结果 作为 响应方法参数 返回
+                    return [
+                        "resper" => $rrsp,
+                        "method" => $rm,
+                        "uri" => array_slice($matches, 1)
+                    ];
+                } catch (\Exception $e) {
+                    //正则匹配出错
+                    trigger_error("resper/fatal::URL无法解析 [ pattern=".$pattern."；URL=".$ustr." ]", E_USER_ERROR);
+                }
             }
-        }
-        if (!empty($ma)) {
-            return [
-                "resper"    => $resper,
-                "method"    => $ma[0],
-                "uri"       => $ma[1]
-            ];
         }
 
         /**
-         *  2  判断是否 Resper 类 (相当于 route 类)
+         *  2  从右向左 依次检查 URI 是否对应了某个 app|module|resper 响应者类
          */
-        $rpd = Resper::has($uri[0]);
-        if (false !== $rpd) {
-            $resper = $rpd;
-            $ma = Resper::seekMethod($rpd, array_slice($uri, 1));
-            if (!empty($ma)) {
-                return [
-                    "resper"    => $resper,
-                    "method"    => $ma[0],
-                    "uri"       => $ma[1]
-                ];
+        for ($i=count($uri); $i>=1; $i--) {
+            //构建要检查的 类名路径 长-->短
+            $cls = implode("/", array_slice($uri, 0, $i));
+            //依次检查 是否对应了某个 app|module|resper 响应者类
+            if ($i==1) {
+                //检查是否 app 响应者，只需要 uri[0] 即可，因此 类名路径超过 1 时 不检查 是否 app
+                $app = App::has($cls);
+                //var_dump($cls);var_dump($app);var_dump(111);
+                if (false !== $app) {
+                    $ma = Resper::seekMethod($app, array_slice($uri, $i));
+                    if (!empty($ma)) {
+                        //找到响应者，立即返回
+                        return [
+                            "resper"    => $app,
+                            "method"    => $ma[0],
+                            "uri"       => $ma[1]
+                        ];
+                    }
+                }
+            }
+
+            //检查是否 module 响应者
+            $mod = Module::has($cls);
+            //var_dump($cls);var_dump($mod);var_dump(222);
+            if (false !== $mod) {
+                $ma = Resper::seekMethod($mod, array_slice($uri, $i));
+                if (!empty($ma)) {
+                    //找到响应者，立即返回
+                    return [
+                        "resper"    => $mod,
+                        "method"    => $ma[0],
+                        "uri"       => $ma[1]
+                    ];
+                }
+            }
+
+            //检查是否 resper 响应者
+            $rsp = Resper::has($cls);
+            //var_dump($cls);var_dump($rsp);var_dump(333);
+            if (false !== $rsp) {
+                $ma = Resper::seekMethod($rsp, array_slice($uri, $i));
+                if (!empty($ma)) {
+                    //找到响应者，立即返回
+                    return [
+                        "resper"    => $rsp,
+                        "method"    => $ma[0],
+                        "uri"       => $ma[1]
+                    ];
+                }
             }
         }
 
@@ -379,23 +447,11 @@ class Resper extends ResperBase
         }
 
         /**
-         *  4  判断是否 Resper 基类中的 某个 public 方法
-         */
-        $ma = Resper::seekMethod($rpd, $uri);
-        if (!empty($ma)) {
-            return [
-                "resper"    => $resperCls,
-                "method"    => $ma[0],
-                "uri"       => $ma[1]
-            ];
-        }
-
-        /**
-         *  5  全部失败，调用 Resper::error()
+         *  4  全部失败，调用 Resper::notfound()
          */
         return [
             "resper"    => $resperCls,
-            "method"    => "error",
+            "method"    => "notfound",
             "uri"       => $uri
         ];
         
@@ -410,7 +466,7 @@ class Resper extends ResperBase
     public static function seekMethod($cls, $uri = [])
     {
         //如果 $cls 不是 Resper 子类，返回 null
-        if (!is_subclass_of($cls, Cls::find("resper"))) return null;
+        if (!is_subclass_of($cls, Resper::class)) return null;
 
         //空 uri
         if (!Is::nemarr($uri) || !Is::indexed($uri)) {
@@ -419,28 +475,52 @@ class Resper extends ResperBase
 
         //查找 响应方法 方法名转为 驼峰，首字母小写 格式
         $m = Str::camel($uri[0], false);
+        //当前响应者类的 路径信息
+        $pi = $cls::pathinfo();
+        //Resper::$config->context 参数 xpath
+        $ppre = $pi["xpath"];
+        //方法名转为 全小写，下划线_ 形式
+        $mk = Str::snake($m, "_");
+        //获取当前 响应者类的 config 参数
+        $conf = Resper::$config->ctx($ppre);
+        if (!Is::nemarr($conf)) $conf = [];
+
         /**
-         * !! 排除一些固定的 resper 实例方法，这些方法不能作为响应方法
+         * 首先检查 是否是 通用响应方法，通常这些方法会通过对应的 Proxyer 代理类来执行最终的响应方法
          */
-        $except = Resper::$methods["except"];
-        if (!in_array($m, $except)) {
-            //响应方法必须是 实例方法/public方法，且必须包含注释 * resper
-            $has = Cls::hasMethod($cls, $m, "public", function($mi) {
-                //必须是实例方法
-                if ($mi->isStatic()) return false;
-                $doc = $mi->getDocComment();
-                //方法必须包含 注释 * resper
-                if (strpos($doc, "* resper")!==false || strpos($doc, "* Resper")!==false) {
-                    return true;
+        if (in_array($m, Resper::$methods["common"])) {
+            if ($m=="api" && count($uri)>1) {
+                //针对 api 特殊处理
+                //取得可能的 api 方法名 小写下划线_ 格式
+                $apin = Str::snake($uri[1], "_");
+                //预先解析得到的 apis 方法列表
+                $apis = $conf["apis"] ?? [];
+                //存在 api 方法，返回
+                if (isset($apis[$apin])) {
+                    $mn = $apis[$apin]["method"] ?? null;
+                    if (Is::nemstr($mn)) return [ $mn, array_slice($uri, 2) ];
                 }
-                return false;
-            });
-            if ($has) return [ $m, array_slice($uri, 1) ];
+            }
+            return [ $m, array_slice($uri, 1) ];
         }
 
-        //检查是否是一些通用的 响应方法
-        if (in_array($m, Resper::$methods["common"])) {
-            return [ $m, array_slice($uri, 1) ];
+        /**
+         * 然后检查 是否是 需要排除的方法
+         */
+        if (in_array($m, Resper::$methods["except"])) {
+            //如果请求的是 需要排除的方法，直接返回 default 方法
+            return [ "default", $uri ];
+        }
+
+        /**
+         * 最后检查 响应者参数中的 respers|apis 方法列表，这些方法在初始化阶段已经从对应的类文件中 解析得到
+         */
+        //预先解析得到的 respers 方法列表
+        $respers = $conf["respers"] ?? [];
+        if (isset($respers[$mk])) {
+            //存在 resper 方法
+            $mn = $respers[$mk]["method"] ?? null;
+            if (Is::nemstr($mn)) return [ $mn, array_slice($uri, 1) ];
         }
 
         //未找到有效的 响应方法 则返回默认方法 default
@@ -451,20 +531,37 @@ class Resper extends ResperBase
      * 全局判断 是否存在 resper 响应类
      * 响应类保存在：
      *      [ROOT_PATH]/[DIR_LIB]/.. 
+     *      [APP_PATH]/[DIR_LIB]/..
      *      [MODULE_PATH]/[module]/..
      * 必须是此类的 子类
-     * @param String $cls 类名
+     * @param String $cls 类名 或 带路径的类名 如：foo | app/foo/bar
      * @return Mixed 找到则返回 类全称，未找到则返回 false
      */
     public static function has($cls)
     {
         //首先查找 web root 下的 responder 响应类
         $wcls = Cls::find($cls);
-        if (!empty($wcls)) {
-            if (is_subclass_of($wcls, Resper::class)) return $wcls;
+        if (!empty($wcls) && is_subclass_of($wcls, Resper::class)) return $wcls;
+
+        //然后在 app 中查找
+        $acls = Cls::find("app/".$cls);
+        if (!empty($acls) && is_subclass_of($acls, Resper::class)) return $acls;
+        $acls = [];
+        $adh = @opendir(APP_PATH);
+        while (($app = @readdir($adh)) !== false) {
+            if ($app=="." || $app=="..") continue;
+            if (!is_dir(APP_PATH.DS.$app)) continue;
+            $acls[] = "app/".$app."/".$cls;
+        }
+        @closedir($adh);
+        $acls = Cls::find($acls);
+        if (!empty($acls)) {
+            if (is_subclass_of($acls, Resper::class)) return $acls;
         }
 
         //然后在 module 中查找
+        $mcls = Cls::find("module/".$cls);
+        if (!empty($mcls) && is_subclass_of($mcls, Resper::class)) return $mcls;
         $mcls = [];
         $mdh = @opendir(MODULE_PATH);
         while (($mdn = @readdir($mdh)) !== false) {
@@ -479,6 +576,120 @@ class Resper extends ResperBase
         }
         
         return false;
+    }
+
+    /**
+     * 根据响应者类全称，解析获取 响应者在 webroot 下的路径相关信息
+     * !! 此方法仅解析 自定义 resper 响应者类，对于 app|module 类型响应者，必须在对应的子类中 覆盖此方法
+     * 针对 自定义 resper 响应者类，类全称 与 路径 的对应关系 如下：
+     *      NS\FooBar                   --> root/library/foo_bar
+     *      NS\app\app_name\FooBar      --> app/app_name/library/foo_bar
+     *      NS\module\md_name\FooBar    --> module/md_name/foo_bar
+     * 对应的 config->context xpath 为：
+     *      NS\FooBar                   --> foo_bar
+     *      NS\app\app_name\FooBar      --> app/app_name        定义在 app 路径下的 resper 类，使用 app 的参数
+     *      NS\module\md_name\FooBar    --> module/md_name      定义在 module 路径下的 resper 类，使用 module 的参数
+     * 对应的 操作标识前缀 为：
+     *      NS\FooBar                   --> foo_bar
+     *      NS\app\app_name\FooBar      --> app/app_name/foo_bar
+     *      NS\module\md_name\FooBar    --> module/md_name/foo_bar
+     * 
+     * @return Array|null 路径相关信息：
+     *  [
+     *      "class" => 类全称,
+     *      "clsn" => 类名 FooBar 形式,
+     *      "clsk" => 类名的路径格式 foo_bar 形式,
+     *      "rtype" => "Resper",
+     *      "path" => 类对应的 文件路径前缀，可以通过 Path::find() 读取
+     *      "xpath" => 类参数 在 Resper::$config->context 中的 xpath 可通过 Resper::$config->ctx($xpath) 获取参数
+     *      "oprn" => 操作标识 前缀
+     *  ]
+     */
+    public static function pathinfo()
+    {
+        //获取当前类全称
+        $cls = static::class;
+        //仅 解析 自定义 resper 响应者类
+        //!! app|module 类型的响应者类，应在各自的子类中 覆盖此方法
+        $rtype = "Resper";
+        //去除 NS 前缀
+        $clsn = str_replace(NS,"",$cls);
+        //类全称 xpath
+        $clarr = explode("\\", $clsn);
+        //类名
+        $clsn = array_pop($clarr);
+        //路径字符统一为 全小写，下划线_
+        $clarr = array_map(function($pi) {
+            return Str::snake($pi, "_");
+        }, $clarr);
+        //类名 转为 路径形式 全小写，下划线_
+        $clsk = Str::snake($clsn, "_");
+        //路径前缀 []
+        $ppre = [];
+        //参数 xpath []
+        $xprr = [];
+        //操作标识 前缀 []
+        $oprr = [];
+
+        if (empty($clarr)) {
+            //定义在 webroot/library 路径下的 resper 响应者类
+            $ppre[] = "root/library";
+            //xpath 路径
+            $xprr[] = $clsk;
+            //操作标识
+            //$oprr[] = $clsk;
+        } else if ($clarr[0]=="app") {
+            //定义在 app/app_name/library 路径下的 resper 响应者类
+            if (count($clarr)<2) {
+                //!! 路径错误，通常不可能  直接返回 null
+                return null;
+            }
+            //生成 路径前缀
+            $ppre = array_slice($clarr, 0,2);
+            $ppre[] = "library";
+            $ppre = array_merge($ppre, array_slice($clarr, 2));
+            //xpath
+            $xprr = array_slice($clarr, 0,2);   //array_merge([], $clarr);
+            //oprr
+            $oprr = array_merge([], $clarr);
+        } else if ($clarr[0]=="module") {
+            //定义在 module/md_name 路径下的 resper 响应者类
+            if (count($clarr)<2) {
+                //!! 路径错误，通常不可能  直接返回 null
+                return null;
+            }
+            //生成 路径前缀
+            $ppre = array_merge($ppre, $clarr);
+            //xpath
+            $xprr = array_slice($clarr, 0,2);   //array_merge([], $clarr);
+            //oprr
+            $oprr = array_merge([], $clarr);
+        } else {
+            //!! 类名错误，通常不可能  直接返回 null
+            return null;
+        }
+        //将 $clsk 写回 路径数组
+        $ppre[] = $clsk;
+        $oprr[] = $clsk;
+
+        //返回解析结果
+        $rtn = [
+            //响应者类全称
+            "class" => $cls,
+            //响应者 类名 驼峰，首字母大写
+            "clsn" => $clsn,
+            //响应者 类名的 路径字符串格式 全小写，下划线_
+            "clsk" => $clsk,
+            //响应者 类型
+            "rtype" => $rtype,
+            //响应者类 对应的 文件路径前缀
+            "path" => implode("/", $ppre),
+            //响应者的预设参数 在 Resper::$config->context 数组中的 xpath
+            "xpath" => implode("/", $xprr),
+            //此响应者类中定义的 响应方法的 操作标识 前缀
+            "oprn" => implode("/", $oprr),
+        ];
+        return $rtn;
     }
 
 

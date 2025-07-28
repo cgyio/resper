@@ -219,6 +219,11 @@ class BaseConfig extends Configer
         $this->parseResperMethods();
 
         /**
+         * 针对 app|module 类型的响应者，查找其路径内部 可能定义的 Resper 响应者类
+         */
+        $this->parseSubResperMethods();
+
+        /**
          * 各类型 resper 响应者 参数配置器类 在此处 执行其他处理方法
          */
         return $this->afterSetConf();
@@ -228,24 +233,31 @@ class BaseConfig extends Configer
      * 解析 任意类型 resper 响应者类中 定义的 resper 响应方法 | api 方法 必须在注释中包含 * resper | * api 的 public 方法
      * 解析得到的此响应者类 可用的 响应方法 信息数组 保存到 $this->context["respers"]
      * !! 子类可覆盖此方法
+     * @param String $rcls 响应者类全称，不指定则使用当前响应者，默认 null
      * @return $this
      */
-    protected function parseResperMethods()
+    protected function parseResperMethods($rcls=null)
     {
         //获取此 config 实例对应的 响应者 类全称 NS\app\FooBar
-        $rcls = $this->getResperCls();
+        if (!Is::nemstr($rcls)) $rcls = $this->getResperCls();
         //对应响应者的 类名 FooBar
         $rn = Cls::name($rcls);
+        //根据响应者类全称，获取路径信息
+        $pi = $rcls::pathinfo();
+        if (!Is::nemarr($pi)) return $this;
 
         //响应者类型
-        $locls = strtolower($rcls);
-        $rtype = strpos($locls,"app")!==false ? "app" : (strpos($locls,"module")!==false ? "module" : "resper");
+        $rtype = $pi["rtype"];
         //根据 类全称 解析得到 操作标识 前缀
-        $oprpre = Operation::getResperOperatePrefix($rcls);
+        $oprpre = $pi["oprn"];  //Operation::getResperOperatePrefix($rcls);
         //获取 响应者类 定义的 intr 属性的值
         $rcps = Cls::ref($rcls)->getDefaultProperties();
         $rintr = $rcps["intr"] ?? Str::camel($rn, true);
-        $rintr = ($rtype=="app" ? "[应用]" : ($rtype=="module" ? "[模块]" : "[自定义]")).$rintr;
+        $rintr = (
+            $rtype=="App" ? "[应用]" : (
+                $rtype=="Module" ? "[模块]" : "[自定义]"
+            )
+        ).$rintr;
 
         //在 响应者类中 查找 public,&!static 方法，且 注释中带有 * resper 标记的方法
         $rms = Cls::specific(
@@ -274,9 +286,74 @@ class BaseConfig extends Configer
         );
 
         //写入 $this->context 中
-        $this->context["respers"] = $rms;
-        $this->context["apis"] = $apis;
+        if (!isset($this->context["respers"])) $this->context["respers"] = [];
+        if (!isset($this->context["apis"])) $this->context["apis"] = [];
+        $this->context["respers"] = Arr::extend($this->context["respers"], $rms);
+        $this->context["apis"] = Arr::extend($this->context["apis"], $apis);
 
+        return $this;
+    }
+
+    /**
+     * 针对 app|module 类型的响应者，查找其路径内部 可能定义的 Resper 响应者类
+     * 读取这些内部 响应者类，解析取得 respers|apis 方法信息，保存到 context
+     * !! 子类可覆盖
+     * @return $this
+     */
+    protected function parseSubResperMethods()
+    {
+        //获取此 config 实例对应的 响应者 类全称 NS\app\FooBar
+        $rcls = $this->getResperCls();
+        //对应响应者的 类名 FooBar
+        $rn = Cls::name($rcls);
+        //根据响应者类全称，获取路径信息
+        $pi = $rcls::pathinfo();
+        if (!Is::nemarr($pi)) return $this;
+
+        //响应者类型
+        $rtype = $pi["rtype"];
+        //操作标识前缀
+        $oprn = $pi["oprn"];
+        
+        if (in_array($rtype, ["App", "Module"])) {
+            //响应者 内部自定义 resper 类保存路径
+            $rp = $pi["path"];
+            if ($rtype=="App") $rp .= "/library";
+            //实际路径
+            $d = Path::find($rp, ["checkDir"=>true]);
+            if (empty($d) || !is_dir($d)) return $this;
+            //在路径下查找 resper 类
+            $this->recursiveParseSubResperMethods($d, $oprn);
+        }
+
+        return $this;
+    }
+
+    /**
+     * 递归查找指定路径下的 resper 类，并解析类中定义的 respers|apis 方法信息，保存到 context 
+     * @param String $dir 要查找的目录
+     * @param String $oprn 类名路径
+     * @return $this
+     */
+    protected function recursiveParseSubResperMethods($dir, $oprn)
+    {
+        //在路径下查找 resper 类
+        $dh = @opendir($dir);
+        while (($fn = readdir($dh))!==false) {
+            if ($fn=="." || $fn=="..") continue;
+            if (is_dir($dir.DS.$fn)) {
+                $this->recursiveParseSubResperMethods($dir.DS.$fn, $oprn."/".$fn);
+            };
+            if (substr($fn, strlen(EXT)*-1)!=EXT) continue;
+            //构建类全称
+            $sclsn = str_replace(EXT,"",$fn);
+            $subcls = $oprn."/".$sclsn;
+            $subcls = Cls::find($subcls);
+            //确认找到的类 是 Resper 类
+            if (empty($subcls) || !class_exists($subcls) || !is_subclass_of($subcls, Resper::class)) continue;
+            //解析此类中的 respers|apis 方法信息
+            $this->parseResperMethods($subcls);
+        }
         return $this;
     }
 

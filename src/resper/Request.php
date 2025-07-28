@@ -127,12 +127,20 @@ class Request
     //$_GET
     public static function get($key, $dft)
     {
-        return self::$current->gets->$key($dft);
+        $gets = empty(Request::$current) ? new Gets($_GET) : Request::$current->gets;
+        return $gets->$key($dft);
     }
     //$_POST
     public static function post($key, $dft)
     {
-        return self::$current->posts->$key($dft);
+        $posts = empty(Request::$current) ? new Posts($_POST) : Request::$current->posts;
+        return $posts->$key($dft);
+    }
+    //php://input
+    public static function input($key="json")
+    {
+        $inps = empty(Request::$current) ? new Input() : Request::$current->inputs;
+        return $inps->$key;
     }
 
     /**

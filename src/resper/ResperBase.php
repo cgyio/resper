@@ -22,6 +22,7 @@ use Cgy\Event;
 use Cgy\module\Configer;
 use Cgy\module\proxyer\OrmProxyer;
 use Cgy\util\Is;
+use Cgy\util\Str;
 use Cgy\util\Arr;
 use Cgy\util\Cls;
 use Cgy\util\Path;
@@ -439,40 +440,38 @@ class ResperBase
         if (!Is::nemarr($ps) || !Is::associate($ps)) $ps = Resper::$params;
         if (Is::nemarr($ps) && Is::associate($ps)) {
             $cls = $ps["resper"];
+            //根据当前响应者类全称，解析 路径信息
+            $cpi = $cls::pathinfo();
+            if (!Is::nemarr($cpi)) return null;
 
             switch ($key) {
                 //$this->ctx 返回 resper::$params 数组
+                case "ps":
                 case "ctx": return $ps; break;
                 //$this->cls 返回当前 resper 的 类名 不是全名
-                case "cls": return Cls::name($this); break;
+                case "cls": return $cpi["clsn"] ?? null; break;
                 //$this->rtp 返回当前 resper 响应者的 runtime 运行时参数缓存目录
-                case "rtp": return ROOT_PATH.DS."runtime".DS.strtolower($this->type).DS.strtolower($this->cls).DS; break;
+                case "rtp": 
+                    $clsn = $cpi["clsn"] ?? null;
+                    if (!Is::nemstr($clsn)) return null;
+                    $rtarr = [];
+                    $rtarr[] = ROOT_PATH;
+                    $rtarr[] = "runtime";
+                    $rtarr[] = strtolower($this->type);
+                    $rtarr[] = Str::snake($clsn,"_");
+                    return implode(DS, $rtarr).DS; 
+                    break;
+                //$this->pi 返回 $resper::pathinfo()
+                case "pi":
+                    return $cpi;
+                    break;
                 
                 /**
                  * $this->path 获取 响应者类 所在路径前缀
                  * 通常用于查找 响应者路径下文件
                  */
                 case "path":
-                    $clp = str_replace(NS, "", $cls);
-                    $clp = str_replace("\\", "/", $clp);
-                    $clp = strtolower($clp);
-                    if ($this->type == "Resper") {
-                        //响应者是 Resper 类
-                        $cla = explode("/", $clp);
-                        if (in_array(strtolower($cla[0]), ["app", "module"])) {
-                            /**
-                             * 定义在 app / module 路径下的 Resper 类
-                             * 如：app/foo/ResperBar 类
-                             * 根路径为：app/foo
-                             * !! 这种情况下，路径长度一定大于 2
-                             */
-                            $clp = implode("/", array_slice($cla, 0,2));
-                        } else {
-                            //自定义 Resper 响应者，必须定义在 WEB_ROOT/library 下
-                            $clp = "root/library/".implode("/", $cla);
-                        }
-                    }
-                    return $clp;
+                    return $cpi["path"] ?? null;
                     break;
                 
                 /**
@@ -480,11 +479,8 @@ class ResperBase
                  * App / Module / Resper
                  */
                 case "type":
-                    $appcls = Cls::find("App");
-                    $modcls = Cls::find("Module");
-                    if (is_subclass_of($cls, $appcls)) return "App";
-                    if (is_subclass_of($cls, $modcls)) return "Module";
-                    return "Resper";
+                    $rtp = $cpi["rtype"] ?? "Resper";
+                    return Str::camel($rtp, true);
                     break;
 
                 /**
@@ -493,7 +489,8 @@ class ResperBase
                  */
                 case "conf":
                     //$rtp = $this->type;
-                    $xpt = $this->path;
+                    $xpt = $cpi["xpath"] ?? null;
+                    if (!Is::nemstr($xpt)) return null;
                     $conf = Resper::$config;
                     return $conf->ctx(strtolower($xpt));
                     break;
@@ -729,16 +726,15 @@ class ResperBase
     }
 
     /**
-     * 解析 URI 最终返回错误
+     * 解析 URI 没有结果，则跳转到此
      * !! 子类 不要 覆盖 !!
      * @return Mixed
      */
-    final public function error()
+    final public function notfound()
     {
-        //TODO: 根据 $response->format 输出格式，来决定：显示错误页面，或 返回带错误信息的 json
-        //...
-
-        Response::error("Resper Error!");
+        //报错
+        trigger_error("resper/notfound", E_USER_ERROR);
+        exit;
     }
 
 

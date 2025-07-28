@@ -87,8 +87,8 @@ class Response
          * 否则 作为框架错误（生产环境中 不应存在此错误），直接返回错误信息，并终止响应
          */
         if (!$this->request instanceof Request || !$this->resper instanceof Resper) {
-            header("Content-Type: text/html; charset=utf-8");
-            echo "Resper Framework Error!";
+            $msg = !$this->request instanceof Request ? "框架初始化阶段发生错误" : "Resper 实例化失败";
+            trigger_error("resper/fatal::".$msg, E_USER_ERROR);
             exit;
         }
         

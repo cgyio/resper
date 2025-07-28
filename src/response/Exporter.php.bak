@@ -1,0 +1,108 @@
+<?php
+/**
+ * resper 框架 response 实例输出工具
+ * 影响最终输出内容的 条件：
+ *      code            200 正常输出 | 其他 状态码则根据 format 输出
+ *      pause           code==503
+ *      format          输出内容的格式，html|str|json|dump
+ */
+
+namespace Cgy\response;
+
+use Cgy\response\Typer;
+use Cgy\Request;
+use Cgy\util\Is;
+use Cgy\util\Str;
+use Cgy\util\Arr;
+use Cgy\util\Cls;
+
+class Exporter 
+{
+    /**
+     * 定义作为 后端服务接口时，返回数据的 统一格式
+     * 通常由前端 通过 ajax 获取的数据
+     */
+    public static $rtnValue = [
+        "error" => false,
+        "errors" => [
+            /*
+            [
+                $error->data ...
+            ]
+            */
+        ],
+        //接口实际返回的数据
+        "data" => [],
+        
+        //当 $exporter->rtnFullData == true 时，还包含：
+        "resper" => [
+            //$resper->ps   当前响应者的 params 参数
+            //"resper" => "响应者类全称",
+            //"method" => "响应方法名",
+            //"uri" => ["响应方法参数"]
+        ],
+    ];
+
+    /**
+     * 必须的输出参数
+     */
+    // http 状态码，code == 503 表示 pause 暂停服务
+    public $code = 200;
+    //可选的 输出类型
+    public static $types = [
+        "api",      //作为后端服务接口，返回数据给前端，通常返回 json 格式的数据
+        "src",      //输出 resource 资源到前端，如：image/video/audio/stream/js/css/vue/... 等文件资源数据
+        "view",     //输出视图 (html 页面)
+    ];
+    //当前选中的 输出类型，默认 view 输出视图
+    public $type = "view";
+    //输出类型 处理类实例
+    public $typer = null;
+
+
+    //当 type == api 时，可选的输出数据的 格式
+    public static $formats = [
+        "json", "xml", "str", "dump", 
+        //待支持
+        //"yaml", "jsonp",
+        //...
+    ];
+    //当前的 输出数据的 格式
+    public $format = "json";
+    
+
+
+    /**
+     * 构造
+     * @param String $type 指定输出类型，不指定则尝试从 $_GET|EXPORT_TYPE 获取
+     */
+    public function __construct($type=null)
+    {
+        if (!Is::nemstr($type)) {
+            $type = Request::get(
+                "type", 
+                (defined("EXPORT_TYPE") ? EXPORT_TYPE : "view")
+            );
+        }
+        if (in_array($type, Exporter::$types)) $this->type = $type;
+
+        //如果 输出 api 数据
+        if ($this->type=="api")
+
+        //构建 typer 实例
+        $tpcls = Cls::find("response/typer/".$this->type);
+        if (!empty($tpcls)) {
+            $this->typer = new $tpcls($this);
+        } else {
+            $this->typer = new Typer($this);
+        }
+
+
+    }
+
+
+    /**
+     * 根据输出参数，决定最终使用 哪一个 exporter 类
+     */
+
+}

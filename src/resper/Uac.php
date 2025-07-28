@@ -292,6 +292,7 @@ class Uac
         //从请求中解析出 操作标识
         $copr = $opr::current();    //$opr->current();
         //如果此操作标识，不在 操作列表 中，表示此操作不需要权限控制，直接返回 true
+        //不需要权限控制的方法（注释中含有 @auth false）也返回 true
         if (!$opr->hasOperation($copr)) return true;
 
         return $copr;

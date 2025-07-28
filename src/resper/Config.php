@@ -153,6 +153,26 @@ class Config extends Configer
         ],
 
 
+
+        /**
+         * 静态路由表
+         * !! 在 Resper::start([ ... ]) 写入自定义参数
+         */
+        "route" => [
+            //可指定要加载 路由表文件，通常在 webroot/library/route.php
+            //"file" => "root/library/route.php",
+
+            /* #手动定义路由表
+            "正则" => [
+                "repser" => "响应者类全称 NS\foo\Bar",
+                "method" => "响应方法名 fooBar",
+                "uri" => [通过解析正则表达式，得到 响应方法参数数组]
+            ],
+            ...
+            */
+        ],
+
+
         
         /**
          * 各 module 自定义参数
@@ -204,7 +224,7 @@ class Config extends Configer
         /**
          * 可手动定义 自定义 resper 响应者类
          * !! 在 Resper::start([ ... ]) 写入自定义参数
-         * 这些类通常保存在 webroot/library 路径下
+         * 这些类通常定义在 webroot/library 路径下
          * 可以为这些类定义对应的 config 类，类文件应为 webroot/library/[custom resper name]/Config.php
          */
         /*
@@ -415,7 +435,7 @@ class Config extends Configer
             //开始处理其他 设置项
             $m = "init".ucfirst(strtolower($k))."Conf";
             if (method_exists($this, $m)) {
-                //定义了设置项处理方法 php|web|module|app
+                //定义了设置项处理方法 route|module|app
                 $this->$m($v);
             } else if (Resper::has($k)!==false) {
                 //初始化自定义 resper 响应者的 参数
@@ -435,7 +455,10 @@ class Config extends Configer
         }
 
         if (!Is::nemarr($this->_rc)) {
-            //如果不存在缓存数据，尝试写入缓存
+            //如果不存在缓存数据
+            //汇总 route 信息到 路由表
+            $this->collectRoutesInResper();
+            //写入缓存
             $this->cacheRuntimeContext();
         } else {
             //如果存在缓存，则将 缓存数据写入 $this->context
@@ -626,6 +649,74 @@ class Config extends Configer
         $this->resper[$resperName] = $cfg;
 
         return $this;
+    }
+    // initRouteConf 初始化 静态路由表
+    protected function initRouteConf($conf)
+    {
+        //如果存在 路由表文件。则尝试读取 php 文件
+        $rf = $conf["file"] ?? null;
+        $routes = [];
+        if (Is::nemstr($rf)) {
+            //查找文件
+            $rf = Path::find($rf);
+            if (!empty($rf) && file_exists($rf)) {
+                //路由表文件 是 return [....] 的 php 文件，通过 require 调用
+                $routes = require($rf);
+            }
+        }
+        //删除 file 参数
+        unset($conf["file"]);
+
+        if (Is::nemarr($routes)) {
+            //合并 路由表文件 和 手动定义的 路由表，手动定义的 覆盖 路由表文件中的
+            $conf = Arr::extend($routes, $conf);
+        }
+
+        //写回 context
+        $this->context["route"] = $conf; 
+
+        return $this;
+    }
+
+    /**
+     * 将解析后的 app|module|resper 参数处理类实例中可能存在的 respers|apis 方法中 
+     * 定义了 route 信息的 汇总到 $this->context["route"] 中
+     * !! 方法中的 route 信息 一般通过 注释中的 @route 定义
+     * @return $this
+     */
+    protected function collectRoutesInResper()
+    {
+        $coll = [];
+        if (!empty($this->app)) $coll = array_merge($coll, (array)$this->app);
+        if (!empty($this->module)) $coll = array_merge($coll, (array)$this->module);
+        if (!empty($this->resper)) $coll = array_merge($coll, (array)$this->resper);
+        
+        if (!empty($coll)) {
+            //遍历
+            foreach ($coll as $k => $c) {
+                $conf = $c->ctx;
+                if (isset($conf["apis"]) && Is::nemarr($conf["apis"])) {
+                    foreach ($conf["apis"] as $apin => $apic) {
+                        if (isset($apic["route"]) && Is::nemstr($apic["route"])) {
+                            $this->context["route"][$apic["route"]] = [
+                                "resper" => $apic["class"],
+                                "method" => $apic["method"]
+                            ];
+                        }
+                    }
+                }
+                if (isset($conf["respers"]) && Is::nemarr($conf["respers"])) {
+                    foreach ($conf["respers"] as $rspn => $rspc) {
+                        if (isset($rspc["route"]) && Is::nemstr($rspc["route"])) {
+                            $this->context["route"][$rspc["route"]] = [
+                                "resper" => $rspc["class"],
+                                "method" => $rspc["method"]
+                            ];
+                        }
+                    }
+                }
+            }
+        }
     }
 
 

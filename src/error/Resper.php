@@ -31,6 +31,11 @@ class Resper extends Error
                 "Resper Fatal Error",
                 "框架发生严重错误，此错误不应出现在生产环境，请与管理员联系！错误原因：%{1}%"
             ],
+
+            "notfound" => [
+                "404 Not Found",
+                "未找到目标页面，请检查输入的网址"
+            ],
         ]
     ];
 }

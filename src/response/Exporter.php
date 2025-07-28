@@ -173,6 +173,15 @@ class Exporter
         if ($cls === false) return null;
         return $cls;
     }
+
+    /**
+     * 输出默认的输出数据结构
+     * @return Array self::$default
+     */
+    public static function default()
+    {
+        return array_merge([],self::$default);
+    }
     
 
 }

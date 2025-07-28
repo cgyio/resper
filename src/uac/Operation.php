@@ -500,10 +500,21 @@ class Operation
     public function hasOperation($opr=null)
     {
         if (!Is::nemstr($opr)) return false;
-        //操作列表
+        //操作列表，auth==false 的操作 不在列表中
         $ctx = $this->getAllAuthOprs();
         //检查给定 操作标识 是否在 操作列表中
         return in_array($opr, $ctx);
+    }
+
+    /**
+     * 根据 操作标识，获取操作信息
+     * @param String $oprn 操作标识
+     * @return Array|null 
+     */
+    public function getOperate($oprn=null)
+    {
+        if (!Is::nemstr($oprn) || !isset($this->context[$oprn])) return null;
+        return $this->context[$oprn];
     }
 
 
@@ -514,16 +525,28 @@ class Operation
 
     /**
      * 获取当前响应者 相关信息
-     * @param Resper $resper 响应者实例，默认 null 使用 Resper::$resper
+     * @param Resper $resper 响应者实例，默认 null 使用 Resper::$resper，也可以直接指定 类全称
      * @return Array 
      */
     protected static function getResperInfo($resper=null)
     {
-        //获取当前响应者实例
-        if (!$resper instanceof Resper) $resper = Resper::$resper;
-        if (!$resper instanceof Resper) return [];
-        //当前响应者类型
-        $rtype = $resper->type;
+        if (!Is::nemstr($resper)) {
+            //未指定 响应者类全称 获取当前响应者实例
+            if (!$resper instanceof Resper) $resper = Resper::$resper;
+            if (!$resper instanceof Resper) return [];
+            //响应者类全称
+            $rcls = get_class($resper);
+        } else {
+            //指定了 类全称，先确认 这是 响应者类
+            if (!class_exists($resper) || !is_subclass_of($resper, Resper::class)) return [];
+            //响应者类全称
+            $rcls = $resper;
+        }
+        //获取响应者类的 路径信息
+        $rpi = $rcls::pathinfo();
+        if (!Is::nemarr($rpi)) return [];
+        //响应者类型
+        $rtype = $rpi["rtype"];
         //类型名称
         $rtns = [
             "App" => "应用",
@@ -531,12 +554,13 @@ class Operation
             "Resper" => "自定义",
         ];
         //当前响应者的类名称，不包含 namespace
-        $rname = $resper->cls;
+        $rname = $rpi["clsn"];
         //当前响应者的说明
         $rintr = $resper->intr;
         if (!Is::nemstr($rintr)) $rintr = $rtns[$rtype].$rname;
         //操作标识前缀
-        $pre = ($rtype=="Resper" ? "" : strtolower($rtype)."/").Orm::snake($rname);
+        //$pre = ($rtype=="Resper" ? "" : Str::snake($rtype,"_")."/").Orm::snake($rname);
+        $pre = $rpi["oprn"];
 
         return [
             "type" => $rtype,
@@ -574,6 +598,8 @@ class Operation
         $ps = $resper->ctx;
         //获取当前请求的响应方法
         $rm = $ps["method"] ?? "default";
+        //响应方法转为 操作标识形式 全小写，下划线_
+        $rk = Orm::snake($rm);
         //获取当前传递给响应方法的 $args 参数序列，即 uri
         $uri = $ps["uri"] ?? [];
 
@@ -592,7 +618,9 @@ class Operation
          * https://host/[appname | custom resper name]/foo[/arg1/arg2/...]
          */
         //返回操作标识，其中方法名为 全小写，下划线_ 格式
-        return $resi["pre"].":".Orm::snake($rm);
+        $isapi = substr($rk, -4)==="_api";
+        if ($isapi) $rk = substr($rk, 0, -4);
+        return ($isapi ? "api/" : "").$resi["pre"].":".$rk;
 
     }
 
@@ -615,17 +643,11 @@ class Operation
             return null;
         }
 
-        //去除类全称中的 通用 NS 前缀
-        $resper = str_replace(NS,"",$resper);
-        //转为 []
-        $rarr = explode("\\", trim($resper, "\\"));
-        //将 响应者 类名 由 FooBar 转为 foo_bar 形式
-        $rn = array_pop($rarr);
-        $rk = Str::snake($rn, "_");
-        //回填
-        $rarr[] = $rk;
-        //返回前缀 一定是全小写
-        return strtolower(implode("/", $rarr));
+        //调用 Resper 类的 pathinfo 方法
+        $rpi = $resper::pathinfo();
+        if (!Is::nemarr($rpi)) return null;
+
+        return $rpi["oprn"];
     }
 
     /**
@@ -656,5 +678,65 @@ class Operation
 
         //操作标识前缀  一定是全小写
         return strtolower(implode("/", $oparr));
+    }
+
+    /**
+     * 根据响应者类全称，和 响应方法，生成 操作标识，并获取这个 方法的 信息数组
+     * @param String $rcls 响应者 类全称 或 类实例
+     * @param String $method 响应方法 fooBar 形式
+     * @return Array|null 方法信息数组
+     */
+    public static function getResperMethodInfo($rcls, $method)
+    {
+        //确认 响应者 类全称 或 类实例
+        if (Is::nemstr($rcls)) {
+            //指定的 是 类全称
+            if (!class_exists($rcls) || !is_subclass_of($rcls, Resper::class)) return null;
+        } else if ($rcls instanceof Resper) {
+            //指定的 是 类实例
+            $rcls = get_class($rcls);
+        } else {
+            //参数错误
+            return null;
+        }
+
+        if (!Is::nemstr($method) || !method_exists($rcls, $method)) {
+            //指定的 响应方法 不在 响应者类中
+            return null;
+        }
+
+        //获取当前指定的 响应者的 路径信息
+        $rpi = $rcls::pathinfo();
+        //未获取到 路径信息
+        if (!Is::nemarr($rpi)) return null;
+        //获取当前请求的响应方法
+        $rm = $method;
+        //响应方法转为 操作标识形式 全小写，下划线_
+        $rk = Orm::snake($rm);
+        //是否 api
+        $isapi = substr($rk, -4)==="_api";
+        if ($isapi) $rk = substr($rk, 0, -4);
+        //响应者的 参数
+        $rc = Resper::$config->ctx($rpi["xpath"]);
+        //在 预先解析得到的 respers|apis 方法中 查找
+        if ($isapi) {
+            $apis = $rc["apis"] ?? [];
+            if (isset($apis[$rk])) return $apis[$rk];
+        } else {
+            $rsps = $rc["respers"] ?? [];
+            if (isset($rsps[$rk])) return $rsps[$rk];
+        }
+
+
+        /**
+         * 当请求的是 一些通用的的响应方法时
+         * TODO: 尝试 通过 ***Proxyer 类，获取 操作标识
+         */
+        if (in_array($rm, Resper::$methods["common"])) {
+            return true;
+        }
+
+        //未找到
+        return null;
     }
 }
